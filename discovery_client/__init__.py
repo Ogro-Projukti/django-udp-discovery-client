@@ -1,4 +1,6 @@
 __version__ = "0.0.0"
 
-# public API will be added later
+from discovery_client.config import ClientConfig, load_config
+
+__all__ = ['ClientConfig', 'load_config']
 
