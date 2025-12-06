@@ -13,3 +13,6 @@ license = {text = "MIT"}
 [project.urls]
 repository = "https://github.com/Ogro-Projukti/django-udp-discovery-client"
 
+[tool.setuptools]
+packages = ["discovery_client"]
+
