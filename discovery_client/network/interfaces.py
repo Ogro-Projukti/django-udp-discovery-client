@@ -5,7 +5,6 @@ Enumerates all IPv4 network interfaces, returning information about
 active non-loopback interfaces with IP, netmask, and broadcast addresses.
 """
 import ipaddress
-import socket
 from dataclasses import dataclass
 from typing import List, Optional
 
