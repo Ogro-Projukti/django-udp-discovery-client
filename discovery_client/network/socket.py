@@ -5,9 +5,11 @@ Provides low-level UDP socket operations for sending discovery requests
 and receiving server responses.
 """
 import socket
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Set
 from discovery_client.config import ClientConfig
 from discovery_client.results import DiscoveryResult
+from discovery_client.network.interfaces import InterfaceInfo, select_interfaces
+from discovery_client.network.utils import broadcast_from_ip_and_mask
 
 
 # Default broadcast address for single broadcast discovery
@@ -236,6 +238,138 @@ def discover_servers_single_broadcast(
         results = receive_responses(sock, config)
         
         return results
+        
+    finally:
+        # Clean up socket
+        if sock is not None:
+            try:
+                sock.close()
+            except OSError:
+                pass  # Ignore errors during cleanup
+
+
+def get_interface_broadcast(iface: InterfaceInfo) -> str:
+    """
+    Get broadcast address for an interface.
+    
+    Uses the interface's broadcast address if present, otherwise computes it
+    from the interface's IP and netmask.
+    
+    Args:
+        iface: InterfaceInfo object
+    
+    Returns:
+        Broadcast address as string
+    
+    Raises:
+        ValueError: If broadcast cannot be computed (invalid IP/netmask)
+    """
+    if iface.broadcast:
+        return iface.broadcast
+    
+    # Compute broadcast from IP and netmask
+    return broadcast_from_ip_and_mask(iface.ip, iface.netmask)
+
+
+def deduplicate_results(results: List[DiscoveryResult]) -> List[DiscoveryResult]:
+    """
+    Remove duplicate DiscoveryResult objects based on (ip, port) key.
+    
+    Keeps the first occurrence of each unique (ip, port) combination.
+    
+    Args:
+        results: List of DiscoveryResult objects (may contain duplicates)
+    
+    Returns:
+        List of unique DiscoveryResult objects (no duplicates by ip:port)
+    
+    Example:
+        >>> results = [
+        ...     DiscoveryResult(ip="192.168.1.100", port=8000, raw_response=b"response1"),
+        ...     DiscoveryResult(ip="192.168.1.100", port=8000, raw_response=b"response2"),
+        ...     DiscoveryResult(ip="10.0.0.5", port=9000, raw_response=b"response3"),
+        ... ]
+        >>> unique = deduplicate_results(results)
+        >>> len(unique)
+        2
+    """
+    seen: Set[Tuple[str, int]] = set()
+    unique_results = []
+    
+    for result in results:
+        key = (result.ip, result.port)
+        if key not in seen:
+            seen.add(key)
+            unique_results.append(result)
+    
+    return unique_results
+
+
+def discover_servers_multi_interface(config: ClientConfig) -> List[DiscoveryResult]:
+    """
+    Perform UDP discovery using multiple network interfaces.
+    
+    This function:
+    1. Selects interfaces based on config (whitelist/blacklist)
+    2. Sends discovery messages to each interface's broadcast address
+    3. Receives responses from all interfaces on a single socket
+    4. Deduplicates results by (ip, port)
+    
+    Args:
+        config: ClientConfig with discovery settings and interface filters
+    
+    Returns:
+        List of unique DiscoveryResult objects for discovered servers.
+        Returns empty list if no servers respond or timeout occurs.
+    
+    Raises:
+        OSError: If socket operations fail
+        ImportError: If network interface libraries are not available
+    
+    Example:
+        >>> from discovery_client import ClientConfig
+        >>> config = ClientConfig(timeout=5.0)
+        >>> servers = discover_servers_multi_interface(config)
+        >>> for server in servers:
+        ...     print(f"Found: {server.ip}:{server.port}")
+    """
+    # Select interfaces based on config
+    interfaces = select_interfaces(config)
+    
+    if not interfaces:
+        # No interfaces selected, return empty list
+        return []
+    
+    sock = None
+    try:
+        # Create a single socket for receiving responses from all interfaces
+        sock = create_discovery_socket(config.timeout)
+        
+        # Send discovery request to each interface's broadcast address
+        for iface in interfaces:
+            try:
+                # Get broadcast address for this interface
+                broadcast_addr = get_interface_broadcast(iface)
+                
+                # Send discovery request to this interface's broadcast
+                send_discovery_request(
+                    sock,
+                    config.discovery_message,
+                    config.discovery_port,
+                    broadcast_addr
+                )
+            except (ValueError, OSError):
+                # Skip this interface if broadcast cannot be computed or send fails
+                # Continue with other interfaces
+                continue
+        
+        # Receive responses from all interfaces
+        results = receive_responses(sock, config)
+        
+        # Deduplicate results by (ip, port)
+        unique_results = deduplicate_results(results)
+        
+        return unique_results
         
     finally:
         # Clean up socket

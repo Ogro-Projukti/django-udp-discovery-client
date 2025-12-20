@@ -70,11 +70,18 @@ result.extra          # Optional metadata dict (for future use)
 
 This client implements the discovery protocol for `django-udp-discovery` servers:
 
-- **Discovery Message**: `"DISCOVER_SERVER"` (sent via UDP broadcast/multicast)
+- **Discovery Message**: `"DISCOVER_SERVER"` (sent via UDP broadcast)
 - **Response Prefix**: `"SERVER_IP:"` (expected in server responses)
 - **Response Format**: `"SERVER_IP:<ip>:<port>"` (e.g., `"SERVER_IP:192.168.1.100:8000"`)
 
 The client sends UDP discovery requests and collects responses from servers that match the protocol.
+
+**Multi-Interface Discovery:**
+- Discovery automatically sends broadcast packets to each selected network interface
+- Broadcast addresses are derived from each interface's IP and netmask
+- If an interface lacks a broadcast address, it is automatically computed
+- Results are deduplicated by (ip, port) to ensure each server appears only once
+- Interface selection respects whitelist/blacklist configuration (see Interface Selection & Filtering)
 
 ### Interface Selection & Filtering
 

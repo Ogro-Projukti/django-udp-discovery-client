@@ -2,7 +2,10 @@ __version__ = "0.0.0"
 
 from discovery_client.config import ClientConfig, load_config
 from discovery_client.results import DiscoveryResult
-from discovery_client.network.socket import discover_servers_single_broadcast
+from discovery_client.network.socket import (
+    discover_servers_single_broadcast,
+    discover_servers_multi_interface,
+)
 from typing import List, Optional
 
 __all__ = [
@@ -22,10 +25,19 @@ def discover(config: Optional[ClientConfig] = None) -> List[DiscoveryResult]:
     responses from servers that respond with the SERVER_IP: prefix.
     
     This function implements the discovery protocol for django-udp-discovery servers:
-    - Sends "DISCOVER_SERVER" message via UDP broadcast/multicast
+    - Selects network interfaces based on config (whitelist/blacklist)
+    - Sends "DISCOVER_SERVER" message via UDP broadcast to each interface's broadcast address
     - Listens for responses starting with "SERVER_IP:" prefix
     - Parses server IP and port from responses
-    - Returns a list of discovered servers
+    - Deduplicates results by (ip, port) to avoid duplicate entries
+    - Returns a list of unique discovered servers
+    
+    Multi-Interface Behavior:
+    - Discovery sends broadcast packets to each selected interface's broadcast address
+    - Broadcast addresses are derived from each interface's IP and netmask
+    - If an interface lacks a broadcast address, it is computed using the interface's
+      IP and netmask
+    - All responses are collected on a single socket and deduplicated before returning
     
     Args:
         config: Optional ClientConfig instance. If None, uses default configuration
@@ -57,22 +69,23 @@ def discover(config: Optional[ClientConfig] = None) -> List[DiscoveryResult]:
         - Response format: "SERVER_IP:<ip>:<port>" (expected format)
     
     Implementation Status:
-        ✅ Basic single broadcast discovery implemented.
-        Sends one UDP broadcast packet and collects responses until timeout.
+        ✅ Multi-interface broadcast discovery implemented.
+        Sends UDP broadcast packets to each selected interface's broadcast address
+        and collects responses. Results are deduplicated by (ip, port).
+        Interface selection respects whitelist/blacklist configuration.
         Future enhancements may include:
-        - Multiple broadcast targets (per interface)
         - Multicast support
         - Retry logic
-        - Interface filtering integration
     """
     if config is None:
         config = load_config()
     
-    # Perform discovery using single broadcast
+    # Perform discovery using multi-interface broadcast
     try:
-        return discover_servers_single_broadcast(config)
-    except OSError as e:
-        # Socket errors - return empty list (could be logged in future)
+        return discover_servers_multi_interface(config)
+    except (OSError, ImportError) as e:
+        # Socket errors or missing network libraries - return empty list
+        # (could be logged in future)
         return []
 
 
