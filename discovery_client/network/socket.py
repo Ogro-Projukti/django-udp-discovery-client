@@ -4,12 +4,16 @@ Socket utilities for UDP discovery.
 Provides low-level UDP socket operations for sending discovery requests
 and receiving server responses.
 """
+import logging
 import socket
 from typing import List, Tuple, Optional, Set
 from discovery_client.config import ClientConfig
 from discovery_client.results import DiscoveryResult
 from discovery_client.network.interfaces import InterfaceInfo, select_interfaces
 from discovery_client.network.utils import broadcast_from_ip_and_mask
+
+# Module-level logger
+logger = logging.getLogger("django_udp_discovery_client")
 
 
 # Default broadcast address for single broadcast discovery
@@ -95,15 +99,22 @@ def create_discovery_socket(timeout: float) -> socket.socket:
     Raises:
         OSError: If socket creation or configuration fails
     """
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    
-    # Enable broadcast
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    
-    # Set timeout
-    sock.settimeout(timeout)
-    
-    return sock
+    try:
+        logger.debug(f"Creating UDP discovery socket with timeout={timeout}s")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        
+        # Enable broadcast
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        logger.debug("Socket broadcast enabled")
+        
+        # Set timeout
+        sock.settimeout(timeout)
+        logger.debug(f"Socket timeout set to {timeout}s")
+        
+        return sock
+    except OSError as e:
+        logger.error(f"Failed to create discovery socket: {e}", exc_info=True)
+        raise
 
 
 def send_discovery_request(
@@ -124,7 +135,17 @@ def send_discovery_request(
     Raises:
         OSError: If send fails
     """
-    sock.sendto(message, (broadcast_address, port))
+    try:
+        logger.info(f"Sending discovery request to {broadcast_address}:{port}")
+        logger.debug(f"Discovery message: {message!r}")
+        sock.sendto(message, (broadcast_address, port))
+        logger.debug(f"Discovery request sent successfully to {broadcast_address}:{port}")
+    except OSError as e:
+        logger.error(
+            f"Failed to send discovery request to {broadcast_address}:{port}: {e}",
+            exc_info=True
+        )
+        raise
 
 
 def receive_responses(
@@ -148,19 +169,26 @@ def receive_responses(
         Invalid responses (wrong prefix) are silently ignored.
     """
     results = []
+    logger.debug("Starting to receive discovery responses")
     
     while True:
         try:
             # Receive response
             data, addr = sock.recvfrom(4096)  # Max UDP packet size is typically 65507
+            logger.debug(f"Received response from {addr[0]}:{addr[1]}: {data!r}")
             
             # Parse response
             parsed = parse_response(data, config.response_prefix)
             if parsed is None:
                 # Invalid response, ignore
+                logger.warning(
+                    f"Received invalid response from {addr[0]}:{addr[1]}: "
+                    f"does not start with prefix {config.response_prefix!r}"
+                )
                 continue
             
             ip, port = parsed
+            logger.info(f"Parsed valid response: server at {ip}:{port}")
             
             # Create DiscoveryResult
             try:
@@ -171,22 +199,31 @@ def receive_responses(
                     extra={"source_address": addr[0]}  # Store source IP for reference
                 )
                 results.append(result)
+                logger.debug(f"Added discovered server: {ip}:{port}")
                 
                 # Check if we've reached max responses
                 if max_responses is not None and len(results) >= max_responses:
+                    logger.debug(f"Reached max responses limit ({max_responses})")
                     break
                     
-            except ValueError:
+            except ValueError as e:
                 # Invalid DiscoveryResult (e.g., invalid IP/port), ignore
+                logger.warning(
+                    f"Failed to create DiscoveryResult from parsed response "
+                    f"({ip}:{port}): {e}"
+                )
                 continue
                 
         except socket.timeout:
             # Timeout reached, stop receiving
+            logger.info(f"Discovery timeout reached. Found {len(results)} server(s)")
             break
-        except OSError:
+        except OSError as e:
             # Socket error, stop receiving
+            logger.error(f"Socket error while receiving responses: {e}", exc_info=True)
             break
     
+    logger.info(f"Discovery complete: {len(results)} server(s) found")
     return results
 
 
@@ -221,6 +258,9 @@ def discover_servers_single_broadcast(
         >>> for server in servers:
         ...     print(f"Found: {server.ip}:{server.port}")
     """
+    logger.info("Starting single broadcast discovery")
+    logger.debug(f"Broadcast address: {broadcast_address}, port: {config.discovery_port}")
+    
     sock = None
     try:
         # Create and configure socket
@@ -239,13 +279,17 @@ def discover_servers_single_broadcast(
         
         return results
         
+    except OSError as e:
+        logger.error(f"Network error during discovery: {e}", exc_info=True)
+        raise
     finally:
         # Clean up socket
         if sock is not None:
             try:
                 sock.close()
-            except OSError:
-                pass  # Ignore errors during cleanup
+                logger.debug("Discovery socket closed")
+            except OSError as e:
+                logger.warning(f"Error closing socket: {e}")
 
 
 def get_interface_broadcast(iface: InterfaceInfo) -> str:
@@ -265,10 +309,21 @@ def get_interface_broadcast(iface: InterfaceInfo) -> str:
         ValueError: If broadcast cannot be computed (invalid IP/netmask)
     """
     if iface.broadcast:
+        logger.debug(f"Using broadcast address from interface {iface.name}: {iface.broadcast}")
         return iface.broadcast
     
     # Compute broadcast from IP and netmask
-    return broadcast_from_ip_and_mask(iface.ip, iface.netmask)
+    try:
+        broadcast = broadcast_from_ip_and_mask(iface.ip, iface.netmask)
+        logger.debug(f"Computed broadcast address for interface {iface.name}: {broadcast}")
+        return broadcast
+    except ValueError as e:
+        logger.error(
+            f"Failed to compute broadcast address for interface {iface.name} "
+            f"({iface.ip}/{iface.netmask}): {e}",
+            exc_info=True
+        )
+        raise
 
 
 def deduplicate_results(results: List[DiscoveryResult]) -> List[DiscoveryResult]:
@@ -333,11 +388,29 @@ def discover_servers_multi_interface(config: ClientConfig) -> List[DiscoveryResu
         >>> for server in servers:
         ...     print(f"Found: {server.ip}:{server.port}")
     """
+    logger.info("Starting multi-interface discovery")
+    
     # Select interfaces based on config
-    interfaces = select_interfaces(config)
+    try:
+        interfaces = select_interfaces(config)
+        logger.info(f"Selected {len(interfaces)} interface(s) for discovery")
+        if logger.isEnabledFor(logging.DEBUG):
+            for iface in interfaces:
+                logger.debug(f"  - {iface.name}: {iface.ip}/{iface.netmask}")
+    except ImportError as e:
+        logger.error(
+            f"Failed to enumerate network interfaces: {e}. "
+            "Install netifaces or ifaddr: pip install django-udp-discovery-client[network]",
+            exc_info=True
+        )
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during interface selection: {e}", exc_info=True)
+        raise
     
     if not interfaces:
         # No interfaces selected, return empty list
+        logger.warning("No network interfaces selected for discovery")
         return []
     
     sock = None
@@ -346,6 +419,7 @@ def discover_servers_multi_interface(config: ClientConfig) -> List[DiscoveryResu
         sock = create_discovery_socket(config.timeout)
         
         # Send discovery request to each interface's broadcast address
+        successful_sends = 0
         for iface in interfaces:
             try:
                 # Get broadcast address for this interface
@@ -358,23 +432,46 @@ def discover_servers_multi_interface(config: ClientConfig) -> List[DiscoveryResu
                     config.discovery_port,
                     broadcast_addr
                 )
-            except (ValueError, OSError):
-                # Skip this interface if broadcast cannot be computed or send fails
-                # Continue with other interfaces
+                successful_sends += 1
+            except ValueError as e:
+                # Skip this interface if broadcast cannot be computed
+                logger.warning(
+                    f"Skipping interface {iface.name}: failed to get broadcast address: {e}"
+                )
                 continue
+            except OSError as e:
+                # Skip this interface if send fails
+                logger.warning(
+                    f"Failed to send discovery request on interface {iface.name}: {e}"
+                )
+                continue
+        
+        if successful_sends == 0:
+            logger.warning("No discovery requests were sent successfully")
+            return []
+        
+        logger.info(f"Sent discovery requests on {successful_sends} interface(s)")
         
         # Receive responses from all interfaces
         results = receive_responses(sock, config)
         
         # Deduplicate results by (ip, port)
         unique_results = deduplicate_results(results)
+        if len(unique_results) < len(results):
+            logger.debug(
+                f"Deduplicated {len(results)} responses to {len(unique_results)} unique servers"
+            )
         
         return unique_results
         
+    except OSError as e:
+        logger.error(f"Network error during multi-interface discovery: {e}", exc_info=True)
+        raise
     finally:
         # Clean up socket
         if sock is not None:
             try:
                 sock.close()
-            except OSError:
-                pass  # Ignore errors during cleanup
+                logger.debug("Discovery socket closed")
+            except OSError as e:
+                logger.warning(f"Error closing socket: {e}")

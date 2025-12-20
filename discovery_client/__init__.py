@@ -1,5 +1,6 @@
 __version__ = "0.0.0"
 
+import logging
 from discovery_client.config import ClientConfig, load_config
 from discovery_client.results import DiscoveryResult
 from discovery_client.network.socket import (
@@ -7,6 +8,9 @@ from discovery_client.network.socket import (
     discover_servers_multi_interface,
 )
 from typing import List, Optional
+
+# Module-level logger
+logger = logging.getLogger("django_udp_discovery_client")
 
 __all__ = [
     'ClientConfig',
@@ -45,10 +49,9 @@ def discover(config: Optional[ClientConfig] = None) -> List[DiscoveryResult]:
     
     Returns:
         List of DiscoveryResult objects, one for each discovered server.
-        Returns empty list if no servers are found or if discovery times out.
-    
-    Raises:
-        OSError: If socket operations fail (currently caught and returns empty list)
+        Returns empty list if no servers are found, if discovery times out,
+        or if network errors occur. Network errors are logged but do not
+        raise exceptions.
         
     Example:
         >>> from discovery_client import discover, load_config
@@ -82,10 +85,30 @@ def discover(config: Optional[ClientConfig] = None) -> List[DiscoveryResult]:
     
     # Perform discovery using multi-interface broadcast
     try:
+        logger.info("Starting server discovery")
         return discover_servers_multi_interface(config)
-    except (OSError, ImportError) as e:
-        # Socket errors or missing network libraries - return empty list
-        # (could be logged in future)
+    except OSError as e:
+        # Socket errors - return empty list
+        logger.error(
+            f"Network error during discovery: {e}. "
+            "Discovery failed due to socket operation error.",
+            exc_info=True
+        )
+        return []
+    except ImportError as e:
+        # Missing network libraries - return empty list
+        logger.error(
+            f"Missing network interface libraries: {e}. "
+            "Install with: pip install django-udp-discovery-client[network]",
+            exc_info=True
+        )
+        return []
+    except Exception as e:
+        # Unexpected errors - log and return empty list
+        logger.error(
+            f"Unexpected error during discovery: {e}",
+            exc_info=True
+        )
         return []
 
 
@@ -127,8 +150,11 @@ def discover_one(config: Optional[ClientConfig] = None) -> Optional[DiscoveryRes
         config = load_config()
     
     # Call discover() and return first result
+    logger.debug("discover_one() called - will return first server or None")
     servers = discover(config)
     if servers:
+        logger.debug(f"discover_one() found server: {servers[0].ip}:{servers[0].port}")
         return servers[0]
+    logger.debug("discover_one() found no servers")
     return None
 

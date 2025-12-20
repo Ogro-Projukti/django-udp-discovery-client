@@ -140,6 +140,69 @@ for server in available_servers:
     # Use server_url in your Django application
 ```
 
+## Logging
+
+The library uses Python's standard `logging` module with the logger name `django_udp_discovery_client`. You can configure logging to see discovery operations and debug network issues.
+
+### Basic Logging Configuration
+
+```python
+import logging
+
+# Configure logging for discovery client
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+```
+
+### Django Logging Configuration
+
+Add this to your Django `settings.py` to enable discovery client logging:
+
+```python
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django_udp_discovery_client': {
+            'handlers': ['console'],
+            'level': 'INFO',  # Use 'DEBUG' for detailed discovery logs
+            'propagate': False,
+        },
+    },
+}
+```
+
+### Log Levels
+
+- **DEBUG**: Detailed information about socket operations, response parsing, and interface selection
+- **INFO**: Discovery start/stop, servers found, and timeouts
+- **WARNING**: Invalid responses, interface send failures, missing broadcast addresses
+- **ERROR**: Socket errors, network failures, and unexpected exceptions
+
+### Example Log Output
+
+```
+INFO - django_udp_discovery_client - Starting multi-interface discovery
+INFO - django_udp_discovery_client - Selected 2 interface(s) for discovery
+INFO - django_udp_discovery_client - Sending discovery request to 192.168.1.255:9999
+INFO - django_udp_discovery_client - Parsed valid response: server at 192.168.1.100:8000
+INFO - django_udp_discovery_client - Discovery complete: 1 server(s) found
+```
+
 ## Requirements
 
 - Python >= 3.8
