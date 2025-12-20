@@ -30,6 +30,12 @@ This package provides a **fully functional** UDP-based service discovery client 
 - **Retry Logic**: Configurable retry mechanisms for failed discovery attempts
 - **Advanced Filtering**: More sophisticated server filtering and selection options
 
+### 🎯 Optional Django Integration
+
+- **Django Management Command**: `python manage.py discover_servers` command for discovering servers from Django projects
+- **Django App**: `discovery_client_django` app that can be added to `INSTALLED_APPS`
+- **Optional Dependency**: Django integration is optional - core library works without Django
+
 ---
 
 ## Package Capabilities
@@ -464,6 +470,18 @@ broadcast = broadcast_from_ip_and_mask("10.0.0.1", 8)
 | `network_from_ip_and_mask()` | `discovery_client.network` | ✅ Functional | Create network object |
 | `broadcast_from_ip_and_mask()` | `discovery_client.network` | ✅ Functional | Calculate broadcast address |
 
+### Django Integration (`discovery_client_django`)
+
+| API | Module | Status | Description |
+|-----|--------|--------|-------------|
+| `discovery_client_django` | `discovery_client_django` | ✅ Functional | Django app for optional integration |
+| `discover_servers` | `discovery_client_django.management.commands` | ✅ Functional | Django management command |
+
+**Django Management Command:**
+- `python manage.py discover_servers` - Discover servers from Django project
+- Supports all `ClientConfig` options via command-line arguments
+- Prints formatted table of discovered servers
+
 ---
 
 ## Usage Examples
@@ -652,16 +670,22 @@ pip install django-udp-discovery-client[network]
 ## Installation
 
 ```bash
-# Basic installation
+# Basic installation (pure Python, no Django required)
 pip install django-udp-discovery-client
 
 # With network dependencies (required for get_interfaces)
 pip install django-udp-discovery-client[network]
 
+# With Django integration (management command)
+pip install django-udp-discovery-client[django]
+
+# With all optional dependencies
+pip install django-udp-discovery-client[all]
+
 # Development installation
 git clone https://github.com/Ogro-Projukti/django-udp-discovery-client.git
 cd django-udp-discovery-client
-pip install -e ".[network]"
+pip install -e ".[network,django]"
 ```
 
 ---

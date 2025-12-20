@@ -17,7 +17,17 @@ A pure Python client library for discovering `django-udp-discovery` servers on l
 ### From PyPI (when published)
 
 ```bash
+# Basic installation (pure Python, no Django required)
 pip install django-udp-discovery-client
+
+# With network interface support
+pip install django-udp-discovery-client[network]
+
+# With Django integration (management command)
+pip install django-udp-discovery-client[django]
+
+# With all optional dependencies
+pip install django-udp-discovery-client[all]
 ```
 
 ### From source
@@ -26,6 +36,9 @@ pip install django-udp-discovery-client
 git clone https://github.com/Ogro-Projukti/django-udp-discovery-client.git
 cd django-udp-discovery-client
 pip install .
+
+# Or with optional dependencies
+pip install ".[network,django]"
 ```
 
 ### Development installation
@@ -34,6 +47,9 @@ pip install .
 git clone https://github.com/Ogro-Projukti/django-udp-discovery-client.git
 cd django-udp-discovery-client
 pip install -e .
+
+# Or with optional dependencies
+pip install -e ".[network,django]"
 ```
 
 ## Quick Start
@@ -129,6 +145,68 @@ python discover_servers.py
 
 **Note**: This client is a **pure Python library** and does not require Django. It can be used from any Python script to discover `django-udp-discovery` servers on your local network.
 
+### Optional Django Integration
+
+This package includes an optional Django integration that provides a management command for discovering servers from within Django projects.
+
+**Installation:**
+
+```bash
+# Install with Django integration
+pip install django-udp-discovery-client[django]
+
+# Or install all optional dependencies
+pip install django-udp-discovery-client[all]
+```
+
+**Setup:**
+
+Add `discovery_client_django` to your Django project's `INSTALLED_APPS` in `settings.py`:
+
+```python
+INSTALLED_APPS = [
+    # ... other apps
+    'discovery_client_django',
+]
+```
+
+**Usage:**
+
+Run the management command to discover servers:
+
+```bash
+# Basic usage
+python manage.py discover_servers
+
+# With custom timeout
+python manage.py discover_servers --timeout 10.0
+
+# With custom port
+python manage.py discover_servers --port 9999
+
+# With interface filtering
+python manage.py discover_servers --interfaces-whitelist "eth0,wlan0"
+
+# Verbose output (shows raw responses)
+python manage.py discover_servers --verbose
+
+# See all options
+python manage.py discover_servers --help
+```
+
+**Example Output:**
+
+```
+Found 2 server(s):
+
+IP Address         Port     URL
+--------------------------------------------------
+192.168.1.100      8000     http://192.168.1.100:8000
+192.168.1.101      8001     http://192.168.1.101:8001
+```
+
+**Note**: The Django integration is **optional**. The core `discovery_client` package works perfectly fine without Django and can be used from any Python script.
+
 ### DiscoveryResult
 
 The `discover()` and `discover_one()` functions return `DiscoveryResult` objects:
@@ -201,10 +279,12 @@ export DISCOVERY_CLIENT_INTERFACES_WHITELIST="eth0,wlan0"
 export DISCOVERY_CLIENT_INTERFACES_BLACKLIST="docker0,lo"
 ```
 
-### Django Integration
+### Using in Django Code
+
+You can use the discovery client in your Django views, management commands, or any Django code:
 
 ```python
-# In your Django settings or views
+# In your Django views or management commands
 from discovery_client import discover, load_config
 
 # Discover available servers with custom timeout
@@ -286,8 +366,13 @@ INFO - django_udp_discovery_client - Discovery complete: 1 server(s) found
 - **Optional**: `netifaces>=0.11.0` or `ifaddr>=0.2.0` for network interface enumeration
   - Install with: `pip install django-udp-discovery-client[network]`
   - Without these, discovery will still work but interface filtering may be limited
+- **Optional**: `Django>=3.2` for Django integration (management command)
+  - Install with: `pip install django-udp-discovery-client[django]`
+  - Required only if you want to use the Django management command
 
-**Note**: This client is a **pure Python library** and does **not require Django**. It can be used from any Python script to discover `django-udp-discovery` servers. Django is only required on the **server side** (when using `django-udp-discovery`).
+**Note**: This client is a **pure Python library** and does **not require Django** for basic usage. It can be used from any Python script to discover `django-udp-discovery` servers. Django is only required:
+- On the **server side** (when using `django-udp-discovery`)
+- For the **optional Django integration** (management command)
 
 ## Contributing
 

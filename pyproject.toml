@@ -15,10 +15,24 @@ network = [
     "netifaces>=0.11.0",
     "ifaddr>=0.2.0",
 ]
+django = [
+    "Django>=3.2",
+]
+all = [
+    "netifaces>=0.11.0",
+    "ifaddr>=0.2.0",
+    "Django>=3.2",
+]
 
 [project.urls]
 repository = "https://github.com/Ogro-Projukti/django-udp-discovery-client"
 
 [tool.setuptools]
-packages = ["discovery_client", "discovery_client.network"]
+packages = [
+    "discovery_client",
+    "discovery_client.network",
+    "discovery_client_django",
+    "discovery_client_django.management",
+    "discovery_client_django.management.commands",
+]
 
