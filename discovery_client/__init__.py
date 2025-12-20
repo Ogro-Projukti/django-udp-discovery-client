@@ -2,6 +2,7 @@ __version__ = "0.0.0"
 
 from discovery_client.config import ClientConfig, load_config
 from discovery_client.results import DiscoveryResult
+from discovery_client.network.socket import discover_servers_single_broadcast
 from typing import List, Optional
 
 __all__ = [
@@ -35,8 +36,7 @@ def discover(config: Optional[ClientConfig] = None) -> List[DiscoveryResult]:
         Returns empty list if no servers are found or if discovery times out.
     
     Raises:
-        NotImplementedError: Network implementation not yet complete.
-                              This function is currently a stub that defines the API.
+        OSError: If socket operations fail (currently caught and returns empty list)
         
     Example:
         >>> from discovery_client import discover, load_config
@@ -57,24 +57,23 @@ def discover(config: Optional[ClientConfig] = None) -> List[DiscoveryResult]:
         - Response format: "SERVER_IP:<ip>:<port>" (expected format)
     
     Implementation Status:
-        ⚠️ API defined but network implementation pending.
-        Currently raises NotImplementedError. Full implementation will include:
-        - UDP socket creation and configuration
-        - Broadcast/multicast sending
-        - Response receiving with timeout
-        - Response parsing
-        - Interface filtering
+        ✅ Basic single broadcast discovery implemented.
+        Sends one UDP broadcast packet and collects responses until timeout.
+        Future enhancements may include:
+        - Multiple broadcast targets (per interface)
+        - Multicast support
         - Retry logic
+        - Interface filtering integration
     """
     if config is None:
         config = load_config()
     
-    # TODO: Implement network discovery logic
-    # This is a stub implementation that defines the API contract
-    raise NotImplementedError(
-        "discover() API is defined but network implementation is not yet complete. "
-        "This function will send UDP discovery requests and collect server responses."
-    )
+    # Perform discovery using single broadcast
+    try:
+        return discover_servers_single_broadcast(config)
+    except OSError as e:
+        # Socket errors - return empty list (could be logged in future)
+        return []
 
 
 def discover_one(config: Optional[ClientConfig] = None) -> Optional[DiscoveryResult]:
@@ -93,10 +92,6 @@ def discover_one(config: Optional[ClientConfig] = None) -> Optional[DiscoveryRes
         DiscoveryResult for the first discovered server, or None if no servers
         are found or if discovery times out.
     
-    Raises:
-        NotImplementedError: Network implementation not yet complete.
-                              This function is currently a stub that defines the API.
-    
     Example:
         >>> from discovery_client import discover_one
         >>> 
@@ -112,18 +107,15 @@ def discover_one(config: Optional[ClientConfig] = None) -> Optional[DiscoveryRes
         same as discover().
     
     Implementation Status:
-        ⚠️ API defined but network implementation pending.
-        Currently raises NotImplementedError. Full implementation will call
-        discover() and return the first result, or None if the list is empty.
+        ✅ Implemented as wrapper around discover().
+        Returns the first discovered server or None if no servers are found.
     """
     if config is None:
         config = load_config()
     
-    # TODO: Implement network discovery logic
-    # This is a stub implementation that defines the API contract
-    # When implemented, this will call discover() and return the first result
-    raise NotImplementedError(
-        "discover_one() API is defined but network implementation is not yet complete. "
-        "This function will return the first discovered server or None."
-    )
+    # Call discover() and return first result
+    servers = discover(config)
+    if servers:
+        return servers[0]
+    return None
 
