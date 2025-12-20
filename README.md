@@ -76,6 +76,47 @@ This client implements the discovery protocol for `django-udp-discovery` servers
 
 The client sends UDP discovery requests and collects responses from servers that match the protocol.
 
+### Interface Selection & Filtering
+
+You can control which network interfaces are used for discovery using whitelist and blacklist filters:
+
+```python
+from discovery_client import ClientConfig, load_config
+from discovery_client.network.interfaces import select_interfaces
+
+# Whitelist: only use specific interfaces
+config = ClientConfig(interfaces_whitelist=["eth0", "wlan0"])
+interfaces = select_interfaces(config)
+# Returns only eth0 and wlan0 interfaces
+
+# Blacklist: exclude specific interfaces
+config = ClientConfig(interfaces_blacklist=["docker0", "veth*"])
+interfaces = select_interfaces(config)
+# Returns all interfaces except docker0 and veth* interfaces
+
+# Both: whitelist first, then apply blacklist
+config = ClientConfig(
+    interfaces_whitelist=["eth0", "eth1", "wlan0"],
+    interfaces_blacklist=["eth1"]
+)
+interfaces = select_interfaces(config)
+# Returns eth0 and wlan0 (eth1 is blacklisted even though whitelisted)
+```
+
+**Filtering Rules:**
+- **Whitelist**: If set, only interfaces whose `name` is in the whitelist are included
+- **Blacklist**: If set, interfaces whose `name` is in the blacklist are excluded
+- **Order**: Whitelist is applied first, then blacklist
+- **Matching**: Interface name matching is **case-sensitive** and **exact** (e.g., `"eth0"` ≠ `"Eth0"`)
+- **No filters**: If neither whitelist nor blacklist is set, all non-loopback interfaces are returned
+
+**Configuration via Environment Variables:**
+```bash
+# Comma-separated interface names
+export DISCOVERY_CLIENT_INTERFACES_WHITELIST="eth0,wlan0"
+export DISCOVERY_CLIENT_INTERFACES_BLACKLIST="docker0,lo"
+```
+
 ### Django Integration
 
 ```python

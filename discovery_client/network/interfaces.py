@@ -6,7 +6,11 @@ active non-loopback interfaces with IP, netmask, and broadcast addresses.
 """
 import ipaddress
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
+
+# Import ClientConfig for type hints (avoid circular import)
+if TYPE_CHECKING:
+    from discovery_client.config import ClientConfig
 
 # Try to import netifaces, fallback to ifaddr
 try:
@@ -220,4 +224,68 @@ def get_interfaces() -> List[InterfaceInfo]:
             "Neither netifaces nor ifaddr is available. "
             "Install with: pip install django-udp-discovery-client[network]"
         )
+
+
+def select_interfaces(config: 'ClientConfig') -> List[InterfaceInfo]:
+    """
+    Select and filter network interfaces based on ClientConfig whitelist/blacklist.
+    
+    Filters the list of available network interfaces according to the whitelist
+    and blacklist settings in the provided ClientConfig.
+    
+    Filtering rules:
+    1. Start with all non-loopback interfaces from get_interfaces()
+    2. If whitelist is set, keep only interfaces whose name is in the whitelist
+    3. If blacklist is set, remove interfaces whose name is in the blacklist
+    4. If both whitelist and blacklist are set, whitelist is applied first, then blacklist
+    
+    Interface name matching is case-sensitive and exact (e.g., "eth0" != "Eth0").
+    
+    Args:
+        config: ClientConfig instance containing interfaces_whitelist and/or
+                interfaces_blacklist settings
+    
+    Returns:
+        List of InterfaceInfo objects that pass the filtering criteria.
+        Returns empty list if no interfaces match the criteria.
+    
+    Raises:
+        ImportError: If neither netifaces nor ifaddr is available (from get_interfaces)
+    
+    Example:
+        >>> from discovery_client import ClientConfig, load_config
+        >>> from discovery_client.network.interfaces import select_interfaces
+        >>> 
+        >>> # Whitelist only specific interfaces
+        >>> config = ClientConfig(interfaces_whitelist=["eth0", "wlan0"])
+        >>> interfaces = select_interfaces(config)
+        >>> 
+        >>> # Blacklist specific interfaces
+        >>> config = ClientConfig(interfaces_blacklist=["lo", "docker0"])
+        >>> interfaces = select_interfaces(config)
+        >>> 
+        >>> # Both whitelist and blacklist
+        >>> config = ClientConfig(
+        ...     interfaces_whitelist=["eth0", "eth1", "wlan0"],
+        ...     interfaces_blacklist=["eth1"]
+        ... )
+        >>> interfaces = select_interfaces(config)
+        >>> # Result: only eth0 and wlan0 (eth1 is blacklisted even though whitelisted)
+    """
+    # Get all available interfaces
+    all_interfaces = get_interfaces()
+    
+    # Apply whitelist if set
+    if config.interfaces_whitelist is not None:
+        whitelist_set = set(config.interfaces_whitelist)
+        filtered = [iface for iface in all_interfaces if iface.name in whitelist_set]
+    else:
+        filtered = all_interfaces
+    
+    # Apply blacklist if set
+    if config.interfaces_blacklist is not None:
+        blacklist_set = set(config.interfaces_blacklist)
+        filtered = [iface for iface in filtered if iface.name not in blacklist_set]
+    
+    return filtered
 
