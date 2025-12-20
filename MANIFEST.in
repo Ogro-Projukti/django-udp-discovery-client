@@ -1,5 +1,7 @@
 include LICENSE
 include README.md
+include CHANGELOG.md
 include pyproject.toml
 recursive-include discovery_client *.py
+recursive-include discovery_client_django *.py
 
