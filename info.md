@@ -3,7 +3,7 @@
 ## Package Status
 
 **Version**: 0.0.0 (Development/Pre-release)  
-**Status**: ⚠️ **Partially Functional** - Core discovery feature not yet implemented  
+**Status**: ✅ **Functional** - Core discovery features implemented and working  
 **Python**: >= 3.8  
 **License**: MIT
 
@@ -11,19 +11,24 @@
 
 ## Current State
 
-This package is in **early development**. It provides infrastructure components for UDP-based service discovery but **does not yet implement the core discovery functionality**.
+This package provides a **fully functional** UDP-based service discovery client for discovering `django-udp-discovery` servers on local networks. All core features are implemented and tested.
 
 ### ✅ What Works
 
+- **UDP Discovery**: Full implementation of `discover()` and `discover_one()` functions
+- **Multi-Interface Discovery**: Automatically discovers servers across all network interfaces
+- **Server Detection**: Can discover and parse responses from `django-udp-discovery` servers
 - **Configuration Management**: Full-featured configuration system with environment variable support
-- **Network Interface Detection**: Cross-platform network interface enumeration
+- **Network Interface Detection**: Cross-platform network interface enumeration with filtering
 - **Network Utilities**: Netmask/prefix conversions and network calculations
+- **Error Handling**: Robust error handling and logging throughout
+- **Interface Filtering**: Whitelist/blacklist support for interface selection
 
-### ❌ What's Missing
+### 🔄 Planned / Future Enhancements
 
-- **Core Discovery Function**: The `discover()` function advertised in README is **not implemented**
-- **UDP Communication**: No socket-based discovery implementation
-- **Server Discovery**: Cannot actually discover servers on the network
+- **Multicast Support**: Multicast discovery (currently uses broadcast only)
+- **Retry Logic**: Configurable retry mechanisms for failed discovery attempts
+- **Advanced Filtering**: More sophisticated server filtering and selection options
 
 ---
 
@@ -75,6 +80,29 @@ The package provides utilities for network address calculations.
 - Subnet analysis
 - Network configuration validation
 - IP address manipulation
+
+### 4. UDP Server Discovery ✅
+
+The package can discover `django-udp-discovery` servers on local networks using UDP broadcast.
+
+**What it can do:**
+- Send UDP discovery requests to network interfaces
+- Receive and parse server responses
+- Discover servers across multiple network interfaces
+- Deduplicate results automatically
+- Filter interfaces using whitelist/blacklist
+- Handle network errors gracefully
+
+**Use cases:**
+- Discovering Django servers running `django-udp-discovery`
+- Finding services on local networks
+- Service discovery in distributed systems
+- Network service enumeration
+
+**Protocol:**
+- Discovery message: `"DISCOVER_SERVER"` (configurable)
+- Response prefix: `"SERVER_IP:"` (configurable)
+- Response format: `"SERVER_IP:<ip>:<port>"`
 
 ---
 
@@ -150,6 +178,101 @@ config = load_config(timeout=10.0, discovery_port=8888)
 - `DISCOVERY_CLIENT_ENABLE_SUBNET_SCAN` - Enable subnet scan (bool)
 - `DISCOVERY_CLIENT_INTERFACES_WHITELIST` - Comma-separated interface names
 - `DISCOVERY_CLIENT_INTERFACES_BLACKLIST` - Comma-separated interface names
+
+---
+
+#### `DiscoveryResult` (Dataclass) ✅ **FUNCTIONAL
+
+Result object returned by discovery functions.
+
+```python
+from discovery_client import DiscoveryResult
+
+# Created automatically by discover() and discover_one()
+result = DiscoveryResult(
+    ip="192.168.1.100",
+    port=8000,
+    raw_response=b"SERVER_IP:192.168.1.100:8000",
+    extra={"source_address": "192.168.1.100"}
+)
+```
+
+**Attributes:**
+- `ip: str` - Server IPv4 address
+- `port: int` - Server port number
+- `raw_response: bytes` - Raw response bytes received from server
+- `extra: Optional[dict]` - Additional metadata (e.g., source address)
+
+**Validation:**
+- IP must be valid IPv4 address
+- Port must be in range 1-65535
+- Raw response must be bytes
+
+---
+
+#### `discover(config: Optional[ClientConfig] = None) -> List[DiscoveryResult]` ✅ **FUNCTIONAL
+
+Discover all `django-udp-discovery` servers on the local network.
+
+```python
+from discovery_client import discover, ClientConfig
+
+# Use default configuration
+servers = discover()
+
+# Use custom configuration
+config = ClientConfig(timeout=10.0, discovery_port=9999)
+servers = discover(config=config)
+
+# Process results
+for server in servers:
+    print(f"Found: {server.ip}:{server.port}")
+```
+
+**Parameters:**
+- `config: Optional[ClientConfig]` - Configuration instance (uses defaults if None)
+
+**Returns:**
+- `List[DiscoveryResult]` - List of discovered servers (empty list if none found)
+
+**Behavior:**
+- Sends UDP broadcast discovery requests to all selected network interfaces
+- Collects responses until timeout
+- Deduplicates results by (ip, port)
+- Returns empty list on network errors (errors are logged)
+
+**Protocol:**
+- Sends: `"DISCOVER_SERVER"` (configurable via `ClientConfig.discovery_message`)
+- Expects: Responses starting with `"SERVER_IP:"` (configurable via `ClientConfig.response_prefix`)
+- Parses: `"SERVER_IP:<ip>:<port>"` format
+
+---
+
+#### `discover_one(config: Optional[ClientConfig] = None) -> Optional[DiscoveryResult]` ✅ **FUNCTIONAL
+
+Discover a single `django-udp-discovery` server (returns first found).
+
+```python
+from discovery_client import discover_one
+
+# Discover first server
+server = discover_one()
+if server:
+    print(f"Found server at {server.ip}:{server.port}")
+else:
+    print("No servers found")
+```
+
+**Parameters:**
+- `config: Optional[ClientConfig]` - Configuration instance (uses defaults if None)
+
+**Returns:**
+- `Optional[DiscoveryResult]` - First discovered server, or None if none found
+
+**Behavior:**
+- Wrapper around `discover()` that returns the first result
+- Returns None if no servers are found or on network errors
+- Same timeout and error handling as `discover()`
 
 ---
 
@@ -330,13 +453,16 @@ broadcast = broadcast_from_ip_and_mask("10.0.0.1", 8)
 |-----|--------|--------|-------------|
 | `ClientConfig` | `discovery_client` | ✅ Functional | Configuration dataclass |
 | `load_config()` | `discovery_client` | ✅ Functional | Load configuration with env var support |
+| `DiscoveryResult` | `discovery_client` | ✅ Functional | Discovery result dataclass |
+| `discover()` | `discovery_client` | ✅ **FUNCTIONAL** | Discover all servers on network |
+| `discover_one()` | `discovery_client` | ✅ **FUNCTIONAL** | Discover single server (returns first found) |
 | `get_interfaces()` | `discovery_client.network.interfaces` | ✅ Functional | Enumerate network interfaces |
+| `select_interfaces()` | `discovery_client.network.interfaces` | ✅ Functional | Filter interfaces by whitelist/blacklist |
 | `InterfaceInfo` | `discovery_client.network.interfaces` | ✅ Functional | Interface information dataclass |
 | `netmask_to_prefix()` | `discovery_client.network` | ✅ Functional | Convert netmask to prefix |
 | `prefix_to_netmask()` | `discovery_client.network` | ✅ Functional | Convert prefix to netmask |
 | `network_from_ip_and_mask()` | `discovery_client.network` | ✅ Functional | Create network object |
 | `broadcast_from_ip_and_mask()` | `discovery_client.network` | ✅ Functional | Calculate broadcast address |
-| `discover()` | `discovery_client` | ❌ **NOT IMPLEMENTED** | Core discovery function (missing) |
 
 ---
 
@@ -406,7 +532,38 @@ broadcast = broadcast_from_ip_and_mask("192.168.1.100", 24)
 print(broadcast)  # 192.168.1.255
 ```
 
-### Example 4: Complete Workflow
+### Example 4: Server Discovery
+
+```python
+from discovery_client import discover, discover_one, ClientConfig, DiscoveryResult
+
+# Discover all servers on the network
+servers = discover()
+print(f"Found {len(servers)} server(s):")
+for server in servers:
+    print(f"  - {server.ip}:{server.port}")
+    print(f"    Raw response: {server.raw_response}")
+
+# Discover just one server (returns first found)
+server = discover_one()
+if server:
+    print(f"Found server at {server.ip}:{server.port}")
+    server_url = f"http://{server.ip}:{server.port}"
+    print(f"Server URL: {server_url}")
+else:
+    print("No servers found")
+
+# Custom configuration
+config = ClientConfig(
+    timeout=10.0,  # Wait up to 10 seconds
+    discovery_port=9999,  # Discovery port
+    interfaces_whitelist=["eth0", "wlan0"]  # Only use specific interfaces
+)
+servers = discover(config=config)
+print(f"Found {len(servers)} server(s) with custom config")
+```
+
+### Example 5: Complete Workflow
 
 ```python
 from discovery_client import load_config
@@ -455,37 +612,6 @@ pip install django-udp-discovery-client[network]
 
 ---
 
-## Limitations & Known Issues
-
-### ⚠️ Critical Limitations
-
-1. **Core Discovery Missing**: The `discover()` function does not exist. The README advertises this functionality, but it's not implemented.
-
-2. **No UDP Communication**: There is no socket-based UDP discovery implementation.
-
-3. **Unused Configuration**: Some configuration options (`interfaces_whitelist`, `interfaces_blacklist`, `enable_subnet_scan`) exist but are not used by any code.
-
-### ⚠️ Missing Features
-
-- Server discovery functionality
-- UDP socket management
-- Response parsing
-- Retry logic implementation
-- Error handling for network operations
-- Django integration (despite package name)
-
----
-
-## What This Package CANNOT Do
-
-❌ **Cannot discover servers** - The core discovery functionality is not implemented  
-❌ **Cannot send UDP packets** - No socket implementation  
-❌ **Cannot receive responses** - No UDP receive logic  
-❌ **Cannot parse server responses** - No response parsing code  
-❌ **Cannot integrate with Django** - No Django-specific code despite the name  
-
----
-
 ## What This Package CAN Do
 
 ✅ **Manage configuration** - Full configuration system with validation  
@@ -500,21 +626,26 @@ pip install django-udp-discovery-client[network]
 
 ### Completed ✅
 - Configuration system (`ClientConfig`, `load_config`)
-- Network interface enumeration (`get_interfaces`)
+- Network interface enumeration (`get_interfaces`, `select_interfaces`)
 - Network utility functions (mask/prefix conversions, network calculations)
+- **Core discovery functions** (`discover()`, `discover_one()`)
+- **UDP socket management** (broadcast discovery, multi-interface support)
+- **Response parsing** (SERVER_IP: protocol parsing)
+- **Server discovery logic** (multi-interface, deduplication)
+- **Error handling and logging** (comprehensive error handling throughout)
+- **Interface filtering** (whitelist/blacklist support)
 - Unit tests for network utilities
+- Unit tests for discovery functions
+- Integration tests with mock UDP server
 
 ### In Progress 🚧
 - None currently
 
 ### Planned 📋
-- Core `discover()` function implementation
-- UDP socket management
-- Response parsing
-- Server discovery logic
-- Error handling
-- Integration tests
-- Django integration (optional)
+- Multicast discovery support
+- Configurable retry logic
+- Advanced server filtering options
+- Performance optimizations
 
 ---
 
@@ -571,6 +702,6 @@ https://github.com/Ogro-Projukti/django-udp-discovery-client
 
 ---
 
-**Last Updated**: Based on codebase analysis as of current state  
+**Last Updated**: Documentation updated to reflect implemented features  
 **Package Version**: 0.0.0  
-**Status**: ⚠️ Partial Implementation - Core feature missing
+**Status**: ✅ Functional - Core discovery features implemented and working

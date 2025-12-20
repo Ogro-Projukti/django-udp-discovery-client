@@ -1,13 +1,16 @@
 # django-udp-discovery-client
 
-A Django client library for discovering django-udp-discovery servers on LAN using UDP multicast/broadcast protocols.
+A pure Python client library for discovering `django-udp-discovery` servers on local networks using UDP broadcast. This library works as a standalone Python package and does not require Django.
 
 ## Features
 
-- UDP-based service discovery on local networks
-- Simple and lightweight client implementation
-- Django integration ready
-- Cross-platform support (Windows, Linux, macOS)
+- **UDP-based service discovery** - Discover `django-udp-discovery` servers on local networks
+- **Multi-interface support** - Automatically discovers servers across all network interfaces
+- **Pure Python library** - No Django required (works with any Python script)
+- **Simple API** - Easy-to-use `discover()` and `discover_one()` functions
+- **Cross-platform** - Works on Windows, Linux, and macOS
+- **Configurable** - Environment variable support and runtime configuration
+- **Robust error handling** - Graceful failure with comprehensive logging
 
 ## Installation
 
@@ -50,7 +53,81 @@ for server in servers:
 server = discover_one()
 if server:
     print(f"Found server at {server.ip}:{server.port}")
+else:
+    print("No servers found")
 ```
+
+### Using with django-udp-discovery
+
+This client is designed to work with `django-udp-discovery` servers. Here's a complete example:
+
+**1. Django Server Setup** (using django-udp-discovery)
+
+In your Django project's `settings.py`:
+
+```python
+INSTALLED_APPS = [
+    # ... other apps
+    'django_udp_discovery',
+]
+
+# django-udp-discovery configuration
+DISCOVERY_PORT = 9999  # Default discovery port
+DISCOVERY_MESSAGE = "DISCOVER_SERVER"  # Discovery message
+DISCOVERY_RESPONSE_PREFIX = "SERVER_IP:"  # Response prefix
+```
+
+**2. Python Client Script**
+
+Create a simple Python script to discover the Django server:
+
+```python
+#!/usr/bin/env python3
+"""
+Example script to discover django-udp-discovery servers.
+This script works as a pure Python library - no Django required.
+"""
+from discovery_client import discover, discover_one, ClientConfig
+
+# Option 1: Discover all servers
+print("Discovering all servers...")
+servers = discover()
+print(f"Found {len(servers)} server(s):")
+for server in servers:
+    print(f"  - {server.ip}:{server.port}")
+    server_url = f"http://{server.ip}:{server.port}"
+    print(f"    URL: {server_url}")
+
+# Option 2: Discover just one server
+print("\nDiscovering single server...")
+server = discover_one()
+if server:
+    print(f"Found server at {server.ip}:{server.port}")
+    print(f"Server URL: http://{server.ip}:{server.port}")
+else:
+    print("No servers found")
+
+# Option 3: Custom configuration
+print("\nUsing custom configuration...")
+config = ClientConfig(
+    timeout=10.0,  # Wait up to 10 seconds
+    discovery_port=9999,  # Discovery port
+)
+servers = discover(config=config)
+print(f"Found {len(servers)} server(s) with custom config")
+```
+
+**3. Run the Example**
+
+```bash
+# Terminal 1: Start your Django server with django-udp-discovery
+python manage.py runserver 0.0.0.0:8000
+
+# Terminal 2: Run the discovery client script
+python discover_servers.py
+```
+
+**Note**: This client is a **pure Python library** and does not require Django. It can be used from any Python script to discover `django-udp-discovery` servers on your local network.
 
 ### DiscoveryResult
 
@@ -206,7 +283,11 @@ INFO - django_udp_discovery_client - Discovery complete: 1 server(s) found
 ## Requirements
 
 - Python >= 3.8
-- Django (version requirements TBD)
+- **Optional**: `netifaces>=0.11.0` or `ifaddr>=0.2.0` for network interface enumeration
+  - Install with: `pip install django-udp-discovery-client[network]`
+  - Without these, discovery will still work but interface filtering may be limited
+
+**Note**: This client is a **pure Python library** and does **not require Django**. It can be used from any Python script to discover `django-udp-discovery` servers. Django is only required on the **server side** (when using `django-udp-discovery`).
 
 ## Contributing
 
