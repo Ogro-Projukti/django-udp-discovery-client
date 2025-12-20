@@ -1,0 +1,576 @@
+# django-udp-discovery-client: Package Information
+
+## Package Status
+
+**Version**: 0.0.0 (Development/Pre-release)  
+**Status**: ⚠️ **Partially Functional** - Core discovery feature not yet implemented  
+**Python**: >= 3.8  
+**License**: MIT
+
+---
+
+## Current State
+
+This package is in **early development**. It provides infrastructure components for UDP-based service discovery but **does not yet implement the core discovery functionality**.
+
+### ✅ What Works
+
+- **Configuration Management**: Full-featured configuration system with environment variable support
+- **Network Interface Detection**: Cross-platform network interface enumeration
+- **Network Utilities**: Netmask/prefix conversions and network calculations
+
+### ❌ What's Missing
+
+- **Core Discovery Function**: The `discover()` function advertised in README is **not implemented**
+- **UDP Communication**: No socket-based discovery implementation
+- **Server Discovery**: Cannot actually discover servers on the network
+
+---
+
+## Package Capabilities
+
+### 1. Configuration Management ✅
+
+The package provides a robust configuration system for UDP discovery client settings.
+
+**What it can do:**
+- Define and validate discovery parameters (port, message, timeout, etc.)
+- Load configuration from environment variables
+- Override configuration at runtime
+- Validate all configuration values
+
+**Use cases:**
+- Setting up discovery client parameters
+- Environment-based configuration
+- Runtime configuration overrides
+
+### 2. Network Interface Enumeration ✅
+
+The package can detect and enumerate network interfaces on the local machine.
+
+**What it can do:**
+- List all active IPv4 network interfaces
+- Get IP addresses, netmasks, and broadcast addresses
+- Filter out loopback interfaces automatically
+- Work cross-platform (Windows, Linux, macOS)
+
+**Use cases:**
+- Network diagnostics
+- Finding available network interfaces
+- Getting broadcast addresses for network operations
+- Network configuration analysis
+
+### 3. Network Utility Functions ✅
+
+The package provides utilities for network address calculations.
+
+**What it can do:**
+- Convert between netmask and CIDR prefix notation
+- Calculate network ranges from IP and mask
+- Compute broadcast addresses
+- Validate network configurations
+
+**Use cases:**
+- Network address calculations
+- Subnet analysis
+- Network configuration validation
+- IP address manipulation
+
+---
+
+## Available APIs
+
+### Main Package (`discovery_client`)
+
+#### `ClientConfig` (Class) ✅ **FUNCTIONAL
+
+Configuration dataclass for UDP discovery client settings.
+
+```python
+from discovery_client import ClientConfig
+
+# Create with defaults
+config = ClientConfig()
+
+# Create with custom values
+config = ClientConfig(
+    discovery_port=8888,
+    timeout=10.0,
+    retries=5
+)
+```
+
+**Attributes:**
+- `discovery_port: int` - UDP port for discovery (default: 9999)
+- `discovery_message: bytes` - Message to send (default: b"DISCOVER_SERVER")
+- `response_prefix: bytes` - Expected response prefix (default: b"SERVER_IP:")
+- `timeout: float` - Timeout in seconds (default: 5.0)
+- `retries: int` - Number of retry attempts (default: 3)
+- `enable_subnet_scan: bool` - Enable subnet scanning (default: True)
+- `interfaces_whitelist: Optional[List[str]]` - Interface whitelist (default: None)
+- `interfaces_blacklist: Optional[List[str]]` - Interface blacklist (default: None)
+
+**Methods:**
+- `from_env(**overrides) -> ClientConfig` - Create from environment variables
+
+**Validation:**
+- Port range: 1-65535
+- Timeout must be positive
+- Retries must be non-negative
+- Message and prefix are normalized to bytes
+
+---
+
+#### `load_config(**kwargs) -> ClientConfig` ✅ **FUNCTIONAL
+
+Load and validate configuration with optional overrides.
+
+```python
+from discovery_client import load_config
+
+# Load with defaults and environment variables
+config = load_config()
+
+# Override specific values
+config = load_config(timeout=10.0, discovery_port=8888)
+```
+
+**Parameters:**
+- `**kwargs` - Runtime overrides (take precedence over env vars)
+
+**Returns:**
+- `ClientConfig` instance
+
+**Environment Variables:**
+- `DISCOVERY_CLIENT_PORT` - Discovery port
+- `DISCOVERY_CLIENT_MESSAGE` - Discovery message
+- `DISCOVERY_CLIENT_RESPONSE_PREFIX` - Response prefix
+- `DISCOVERY_CLIENT_TIMEOUT` - Timeout in seconds
+- `DISCOVERY_CLIENT_RETRIES` - Number of retries
+- `DISCOVERY_CLIENT_ENABLE_SUBNET_SCAN` - Enable subnet scan (bool)
+- `DISCOVERY_CLIENT_INTERFACES_WHITELIST` - Comma-separated interface names
+- `DISCOVERY_CLIENT_INTERFACES_BLACKLIST` - Comma-separated interface names
+
+---
+
+### Network Module (`discovery_client.network`)
+
+#### `get_interfaces() -> List[InterfaceInfo]` ✅ **FUNCTIONAL
+
+Enumerate all active IPv4 network interfaces.
+
+```python
+from discovery_client.network.interfaces import get_interfaces
+
+interfaces = get_interfaces()
+for iface in interfaces:
+    print(f"{iface.name}: {iface.ip}/{iface.netmask} -> {iface.broadcast}")
+```
+
+**Returns:**
+- `List[InterfaceInfo]` - List of interface information objects
+
+**Raises:**
+- `ImportError` - If neither `netifaces` nor `ifaddr` is available
+
+**Dependencies:**
+- Requires `netifaces>=0.11.0` OR `ifaddr>=0.2.0`
+- Install with: `pip install django-udp-discovery-client[network]`
+
+**Features:**
+- Automatically filters loopback interfaces
+- Computes broadcast addresses if missing
+- Cross-platform support (Windows, Linux, macOS)
+- Prefers `netifaces`, falls back to `ifaddr`
+
+---
+
+#### `InterfaceInfo` (Dataclass) ✅ **FUNCTIONAL
+
+Information about a network interface.
+
+```python
+from discovery_client.network.interfaces import InterfaceInfo
+
+# Attributes
+iface.name        # Interface name (e.g., 'eth0', 'en0', 'Ethernet')
+iface.ip          # IPv4 address (e.g., '192.168.1.100')
+iface.netmask     # Netmask (e.g., '255.255.255.0')
+iface.broadcast   # Broadcast address (e.g., '192.168.1.255')
+```
+
+**Attributes:**
+- `name: str` - Interface name
+- `ip: str` - IPv4 address
+- `netmask: str` - Netmask in dotted decimal format
+- `broadcast: Optional[str]` - Broadcast address (computed if None)
+
+---
+
+#### `netmask_to_prefix(netmask: str) -> int` ✅ **FUNCTIONAL
+
+Convert netmask to CIDR prefix length.
+
+```python
+from discovery_client.network import netmask_to_prefix
+
+prefix = netmask_to_prefix("255.255.255.0")  # Returns 24
+prefix = netmask_to_prefix("255.0.0.0")       # Returns 8
+```
+
+**Parameters:**
+- `netmask: str` - Netmask in dotted decimal format (e.g., "255.255.255.0")
+
+**Returns:**
+- `int` - CIDR prefix length (0-32)
+
+**Raises:**
+- `ValueError` - If netmask is invalid or non-contiguous
+
+**Examples:**
+- `"255.255.255.0"` → `24`
+- `"255.255.0.0"` → `16`
+- `"255.0.0.0"` → `8`
+- `"255.255.255.248"` → `29`
+
+---
+
+#### `prefix_to_netmask(prefix: int) -> str` ✅ **FUNCTIONAL
+
+Convert CIDR prefix length to netmask.
+
+```python
+from discovery_client.network import prefix_to_netmask
+
+netmask = prefix_to_netmask(24)  # Returns "255.255.255.0"
+netmask = prefix_to_netmask(8)    # Returns "255.0.0.0"
+```
+
+**Parameters:**
+- `prefix: int` - CIDR prefix length (0-32)
+
+**Returns:**
+- `str` - Netmask in dotted decimal format
+
+**Raises:**
+- `ValueError` - If prefix is out of valid range (0-32)
+
+**Examples:**
+- `24` → `"255.255.255.0"`
+- `16` → `"255.255.0.0"`
+- `8` → `"255.0.0.0"`
+- `29` → `"255.255.255.248"`
+
+---
+
+#### `network_from_ip_and_mask(ip: str, mask: Union[str, int]) -> ipaddress.IPv4Network` ✅ **FUNCTIONAL
+
+Create IPv4Network object from IP address and netmask.
+
+```python
+from discovery_client.network import network_from_ip_and_mask
+
+# With netmask string
+network = network_from_ip_and_mask("192.168.1.100", "255.255.255.0")
+# Returns: IPv4Network('192.168.1.0/24')
+
+# With prefix length
+network = network_from_ip_and_mask("10.0.0.1", 8)
+# Returns: IPv4Network('10.0.0.0/8')
+
+# With prefix string
+network = network_from_ip_and_mask("172.16.0.1", "/16")
+# Returns: IPv4Network('172.16.0.0/16')
+```
+
+**Parameters:**
+- `ip: str` - IPv4 address (e.g., "192.168.1.100")
+- `mask: Union[str, int]` - Netmask string, prefix int, or prefix string like "/24"
+
+**Returns:**
+- `ipaddress.IPv4Network` - Network object
+
+**Raises:**
+- `ValueError` - If IP or mask is invalid
+- `TypeError` - If mask is not str or int
+
+---
+
+#### `broadcast_from_ip_and_mask(ip: str, mask: Union[str, int]) -> str` ✅ **FUNCTIONAL
+
+Calculate broadcast address from IP address and netmask.
+
+```python
+from discovery_client.network import broadcast_from_ip_and_mask
+
+# With netmask string
+broadcast = broadcast_from_ip_and_mask("192.168.1.100", "255.255.255.0")
+# Returns: "192.168.1.255"
+
+# With prefix length
+broadcast = broadcast_from_ip_and_mask("10.0.0.1", 8)
+# Returns: "10.255.255.255"
+```
+
+**Parameters:**
+- `ip: str` - IPv4 address
+- `mask: Union[str, int]` - Netmask string, prefix int, or prefix string
+
+**Returns:**
+- `str` - Broadcast address
+
+**Raises:**
+- `ValueError` - If IP or mask is invalid
+
+---
+
+## API Summary Table
+
+| API | Module | Status | Description |
+|-----|--------|--------|-------------|
+| `ClientConfig` | `discovery_client` | ✅ Functional | Configuration dataclass |
+| `load_config()` | `discovery_client` | ✅ Functional | Load configuration with env var support |
+| `get_interfaces()` | `discovery_client.network.interfaces` | ✅ Functional | Enumerate network interfaces |
+| `InterfaceInfo` | `discovery_client.network.interfaces` | ✅ Functional | Interface information dataclass |
+| `netmask_to_prefix()` | `discovery_client.network` | ✅ Functional | Convert netmask to prefix |
+| `prefix_to_netmask()` | `discovery_client.network` | ✅ Functional | Convert prefix to netmask |
+| `network_from_ip_and_mask()` | `discovery_client.network` | ✅ Functional | Create network object |
+| `broadcast_from_ip_and_mask()` | `discovery_client.network` | ✅ Functional | Calculate broadcast address |
+| `discover()` | `discovery_client` | ❌ **NOT IMPLEMENTED** | Core discovery function (missing) |
+
+---
+
+## Usage Examples
+
+### Example 1: Configuration Management
+
+```python
+from discovery_client import ClientConfig, load_config
+
+# Method 1: Direct instantiation
+config = ClientConfig(
+    discovery_port=8888,
+    timeout=10.0,
+    retries=5
+)
+
+# Method 2: From environment variables
+# Set: DISCOVERY_CLIENT_PORT=8888
+# Set: DISCOVERY_CLIENT_TIMEOUT=10.0
+config = load_config()
+
+# Method 3: Override environment variables
+config = load_config(timeout=15.0)  # Overrides env var
+```
+
+### Example 2: Network Interface Enumeration
+
+```python
+from discovery_client.network.interfaces import get_interfaces, InterfaceInfo
+
+try:
+    interfaces = get_interfaces()
+    print(f"Found {len(interfaces)} network interface(s):")
+    
+    for iface in interfaces:
+        print(f"  {iface.name}:")
+        print(f"    IP: {iface.ip}")
+        print(f"    Netmask: {iface.netmask}")
+        print(f"    Broadcast: {iface.broadcast}")
+except ImportError:
+    print("Install network dependencies: pip install django-udp-discovery-client[network]")
+```
+
+### Example 3: Network Utilities
+
+```python
+from discovery_client.network import (
+    netmask_to_prefix,
+    prefix_to_netmask,
+    network_from_ip_and_mask,
+    broadcast_from_ip_and_mask,
+)
+
+# Convert netmask to prefix
+prefix = netmask_to_prefix("255.255.255.0")  # 24
+
+# Convert prefix to netmask
+netmask = prefix_to_netmask(24)  # "255.255.255.0"
+
+# Create network object
+network = network_from_ip_and_mask("192.168.1.100", "255.255.255.0")
+print(network)  # 192.168.1.0/24
+
+# Calculate broadcast
+broadcast = broadcast_from_ip_and_mask("192.168.1.100", 24)
+print(broadcast)  # 192.168.1.255
+```
+
+### Example 4: Complete Workflow
+
+```python
+from discovery_client import load_config
+from discovery_client.network.interfaces import get_interfaces
+from discovery_client.network import netmask_to_prefix, broadcast_from_ip_and_mask
+
+# Load configuration
+config = load_config(timeout=5.0)
+
+# Get network interfaces
+interfaces = get_interfaces()
+
+# Process each interface
+for iface in interfaces:
+    # Convert netmask to prefix
+    prefix = netmask_to_prefix(iface.netmask)
+    
+    # Calculate broadcast (if not already set)
+    if not iface.broadcast:
+        broadcast = broadcast_from_ip_and_mask(iface.ip, iface.netmask)
+    else:
+        broadcast = iface.broadcast
+    
+    print(f"Interface: {iface.name}")
+    print(f"  Network: {iface.ip}/{prefix}")
+    print(f"  Broadcast: {broadcast}")
+    print(f"  Discovery port: {config.discovery_port}")
+```
+
+---
+
+## Dependencies
+
+### Core Dependencies
+- **Python**: >= 3.8
+- **Standard Library**: `ipaddress`, `dataclasses`, `typing`, `os`
+
+### Optional Dependencies (for `get_interfaces()`)
+- `netifaces>=0.11.0` (preferred)
+- `ifaddr>=0.2.0` (fallback)
+
+**Installation:**
+```bash
+pip install django-udp-discovery-client[network]
+```
+
+---
+
+## Limitations & Known Issues
+
+### ⚠️ Critical Limitations
+
+1. **Core Discovery Missing**: The `discover()` function does not exist. The README advertises this functionality, but it's not implemented.
+
+2. **No UDP Communication**: There is no socket-based UDP discovery implementation.
+
+3. **Unused Configuration**: Some configuration options (`interfaces_whitelist`, `interfaces_blacklist`, `enable_subnet_scan`) exist but are not used by any code.
+
+### ⚠️ Missing Features
+
+- Server discovery functionality
+- UDP socket management
+- Response parsing
+- Retry logic implementation
+- Error handling for network operations
+- Django integration (despite package name)
+
+---
+
+## What This Package CANNOT Do
+
+❌ **Cannot discover servers** - The core discovery functionality is not implemented  
+❌ **Cannot send UDP packets** - No socket implementation  
+❌ **Cannot receive responses** - No UDP receive logic  
+❌ **Cannot parse server responses** - No response parsing code  
+❌ **Cannot integrate with Django** - No Django-specific code despite the name  
+
+---
+
+## What This Package CAN Do
+
+✅ **Manage configuration** - Full configuration system with validation  
+✅ **Detect network interfaces** - Enumerate active network interfaces  
+✅ **Calculate network addresses** - Convert masks, compute networks and broadcasts  
+✅ **Validate network configs** - Validate IP addresses, netmasks, and network ranges  
+✅ **Cross-platform support** - Works on Windows, Linux, and macOS  
+
+---
+
+## Development Status
+
+### Completed ✅
+- Configuration system (`ClientConfig`, `load_config`)
+- Network interface enumeration (`get_interfaces`)
+- Network utility functions (mask/prefix conversions, network calculations)
+- Unit tests for network utilities
+
+### In Progress 🚧
+- None currently
+
+### Planned 📋
+- Core `discover()` function implementation
+- UDP socket management
+- Response parsing
+- Server discovery logic
+- Error handling
+- Integration tests
+- Django integration (optional)
+
+---
+
+## Installation
+
+```bash
+# Basic installation
+pip install django-udp-discovery-client
+
+# With network dependencies (required for get_interfaces)
+pip install django-udp-discovery-client[network]
+
+# Development installation
+git clone https://github.com/Ogro-Projukti/django-udp-discovery-client.git
+cd django-udp-discovery-client
+pip install -e ".[network]"
+```
+
+---
+
+## Testing
+
+```bash
+# Run network utility tests
+pytest tests/test_network_utils.py -v
+
+# Run all tests (when available)
+pytest tests/ -v
+```
+
+---
+
+## Contributing
+
+This package is in early development. Contributions are welcome for:
+- Core discovery implementation
+- UDP socket management
+- Response parsing
+- Error handling
+- Additional tests
+- Documentation improvements
+
+---
+
+## License
+
+MIT License - see LICENSE file for details.
+
+---
+
+## Repository
+
+https://github.com/Ogro-Projukti/django-udp-discovery-client
+
+---
+
+**Last Updated**: Based on codebase analysis as of current state  
+**Package Version**: 0.0.0  
+**Status**: ⚠️ Partial Implementation - Core feature missing

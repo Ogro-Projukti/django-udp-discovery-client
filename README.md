@@ -38,22 +38,58 @@ pip install -e .
 ### Basic Usage
 
 ```python
-from discovery_client import discover
+from discovery_client import discover, discover_one, DiscoveryResult
 
-# Discover servers on the local network
+# Discover all servers on the local network
 servers = discover()
 for server in servers:
-    print(f"Found server: {server}")
+    print(f"Found server: {server.ip}:{server.port}")
+    print(f"  Raw response: {server.raw_response}")
+
+# Discover a single server (returns first found)
+server = discover_one()
+if server:
+    print(f"Found server at {server.ip}:{server.port}")
 ```
+
+### DiscoveryResult
+
+The `discover()` and `discover_one()` functions return `DiscoveryResult` objects:
+
+```python
+from discovery_client import DiscoveryResult
+
+# DiscoveryResult fields:
+result.ip            # IPv4 address (str): "192.168.1.100"
+result.port           # Port number (int): 8000
+result.raw_response   # Raw bytes received: b"SERVER_IP:192.168.1.100:8000"
+result.extra          # Optional metadata dict (for future use)
+```
+
+### Discovery Protocol
+
+This client implements the discovery protocol for `django-udp-discovery` servers:
+
+- **Discovery Message**: `"DISCOVER_SERVER"` (sent via UDP broadcast/multicast)
+- **Response Prefix**: `"SERVER_IP:"` (expected in server responses)
+- **Response Format**: `"SERVER_IP:<ip>:<port>"` (e.g., `"SERVER_IP:192.168.1.100:8000"`)
+
+The client sends UDP discovery requests and collects responses from servers that match the protocol.
 
 ### Django Integration
 
 ```python
 # In your Django settings or views
-from discovery_client import discover
+from discovery_client import discover, load_config
 
-# Discover available servers
-available_servers = discover(timeout=5)
+# Discover available servers with custom timeout
+config = load_config(timeout=5.0)
+available_servers = discover(config=config)
+
+# Use discovered servers
+for server in available_servers:
+    server_url = f"http://{server.ip}:{server.port}"
+    # Use server_url in your Django application
 ```
 
 ## Requirements
