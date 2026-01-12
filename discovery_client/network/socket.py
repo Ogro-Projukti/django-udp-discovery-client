@@ -5,6 +5,7 @@ Provides low-level UDP socket operations for sending discovery requests
 and receiving server responses.
 """
 import logging
+import ipaddress
 import socket
 from typing import List, Tuple, Optional, Set
 from discovery_client.config import ClientConfig
@@ -326,6 +327,120 @@ def get_interface_broadcast(iface: InterfaceInfo) -> str:
         raise
 
 
+def detect_segmented_network(interfaces: List[InterfaceInfo]) -> Optional[dict]:
+    """
+    Detect if the network is a large segmented network that may not work with
+    current broadcast-based discovery.
+    
+    Large subnets (prefix < 24) are often segmented into /24 VLANs, and
+    UDP broadcasts only reach devices in the same broadcast domain. This
+    function detects such networks and returns information about the issue.
+    
+    This function is OS-independent and uses only standard Python libraries:
+    - ipaddress module (Python 3.3+ standard library)
+    - Standard IP address parsing and network calculations
+    - Works on Windows, Linux, macOS, and other platforms
+    
+    Detection criteria (all must be true to trigger warning):
+    1. Network prefix < 24 (large subnet)
+    2. Network is in corporate range (10.x.x.x or 172.16-31.x.x)
+    3. Broadcast domain differs from calculated broadcast (indicates segmentation)
+    
+    Networks that are NOT flagged:
+    - /24 networks (typical for mobile hotspots, home networks) - these work fine
+    - 192.168.x.x networks with /24 or smaller - typically not segmented
+    - Networks where broadcast domain matches calculated broadcast
+    
+    Args:
+        interfaces: List of InterfaceInfo objects to check
+    
+    Returns:
+        Dictionary with detection results if segmented network detected, None otherwise.
+        Contains keys: 'interface', 'ip', 'network', 'prefix', 'total_hosts',
+        'calculated_broadcast', 'likely_broadcast_domain', 'is_corporate', 'segments'
+    
+    Note:
+        Detection is based on network topology (subnet size and IP ranges),
+        not OS-specific features. Works identically across all platforms.
+    """
+    for iface in interfaces:
+        # Skip link-local addresses (169.254.x.x)
+        if iface.ip.startswith("169.254"):
+            continue
+        
+        # Skip virtual/hypervisor networks that are typically not problematic
+        # These are usually isolated and work fine with broadcast
+        if any(virtual in iface.name.lower() for virtual in ['hyper-v', 'virtual', 'vmware', 'virtualbox', 'docker']):
+            # But only skip if it's a /24 or smaller (not a large segmented network)
+            try:
+                network = ipaddress.IPv4Network(f"{iface.ip}/{iface.netmask}", strict=False)
+                if network.prefixlen >= 24:
+                    continue  # Skip virtual networks with /24 or smaller
+            except:
+                continue
+        
+        try:
+            # Parse network from IP and netmask
+            network = ipaddress.IPv4Network(f"{iface.ip}/{iface.netmask}", strict=False)
+            prefix = network.prefixlen
+            total_hosts = network.num_addresses
+            
+            # Only check large subnets (prefix < 24) - /24 networks work fine
+            # Mobile hotspots and home networks typically use /24, so we skip those
+            if prefix < 24:
+                # Skip 192.168.x.x networks entirely - these are typically home/mobile hotspot networks
+                # that work fine with broadcast discovery, even if they have large subnets
+                if iface.ip.startswith("192.168."):
+                    continue  # Skip mobile hotspot/home networks - they work fine
+                
+                # Calculate what the actual broadcast domain likely is (/24)
+                network_24 = ipaddress.IPv4Network(f"{iface.ip}/24", strict=False)
+                actual_broadcast_domain = str(network_24.broadcast_address)
+                calculated_broadcast = iface.broadcast
+                
+                # Check if it's a corporate network (RFC 1918 private IP ranges)
+                # This detection is OS-independent and works on all platforms
+                is_corporate = False
+                try:
+                    ip_parts = iface.ip.split(".")
+                    if len(ip_parts) >= 2:
+                        if iface.ip.startswith("10."):
+                            # 10.0.0.0/8 - Class A private network (commonly corporate)
+                            is_corporate = True
+                        elif iface.ip.startswith("172."):
+                            # 172.16.0.0/12 - Class B private network (172.16.0.0 to 172.31.255.255)
+                            second_octet = int(ip_parts[1])
+                            if 16 <= second_octet <= 31:
+                                is_corporate = True
+                        # Note: 192.168.x.x is explicitly skipped above - these are home/mobile hotspot
+                except (ValueError, IndexError):
+                    # If IP parsing fails, continue without corporate detection
+                    # This is OS-independent - just skip this check
+                    pass
+                
+                # Only warn if:
+                # 1. It's a corporate network (10.x.x.x or 172.16-31.x.x)
+                # 2. AND the broadcast domain differs from calculated broadcast (indicates segmentation)
+                # This ensures we don't warn about mobile hotspots (192.168.x.x) or simple networks
+                if is_corporate and actual_broadcast_domain != calculated_broadcast:
+                    return {
+                        'interface': iface.name,
+                        'ip': iface.ip,
+                        'network': str(network),
+                        'prefix': prefix,
+                        'total_hosts': total_hosts,
+                        'calculated_broadcast': calculated_broadcast,
+                        'likely_broadcast_domain': actual_broadcast_domain,
+                        'is_corporate': is_corporate,
+                        'segments': 2 ** (24 - prefix) if prefix < 24 else 1
+                    }
+        except (ValueError, ipaddress.AddressValueError, ipaddress.NetmaskValueError):
+            # Skip interfaces with invalid network configuration
+            continue
+    
+    return None
+
+
 def deduplicate_results(results: List[DiscoveryResult]) -> List[DiscoveryResult]:
     """
     Remove duplicate DiscoveryResult objects based on (ip, port) key.
@@ -390,6 +505,9 @@ def discover_servers_multi_interface(config: ClientConfig) -> List[DiscoveryResu
     """
     logger.info("Starting multi-interface discovery")
     
+    # Track segmented network info for later use
+    segmented_info = None
+    
     # Select interfaces based on config
     try:
         interfaces = select_interfaces(config)
@@ -397,6 +515,10 @@ def discover_servers_multi_interface(config: ClientConfig) -> List[DiscoveryResu
         if logger.isEnabledFor(logging.DEBUG):
             for iface in interfaces:
                 logger.debug(f"  - {iface.name}: {iface.ip}/{iface.netmask}")
+        
+        # Detect segmented networks - we'll check after discovery to see if warning is needed
+        # Store the info but don't warn yet - we'll warn only if no servers are found
+        segmented_info = detect_segmented_network(interfaces)
     except ImportError as e:
         logger.error(
             f"Failed to enumerate network interfaces: {e}. "
@@ -460,6 +582,40 @@ def discover_servers_multi_interface(config: ClientConfig) -> List[DiscoveryResu
         if len(unique_results) < len(results):
             logger.debug(
                 f"Deduplicated {len(results)} responses to {len(unique_results)} unique servers"
+            )
+        
+        # Only warn about segmented networks if NO servers were found
+        # If servers are found, the network is working (even if segmented)
+        # This prevents false warnings on mobile hotspot networks where discovery works fine
+        if segmented_info and not unique_results:
+            logger.warning(
+                "=" * 70 + "\n"
+                "WARNING: Segmented Network Detected\n"
+                "=" * 70 + "\n"
+                f"Interface: {segmented_info['interface']} ({segmented_info['ip']})\n"
+                f"Network: {segmented_info['network']} ({segmented_info['total_hosts']:,} hosts)\n"
+                f"Calculated broadcast: {segmented_info['calculated_broadcast']}\n"
+                f"Likely broadcast domain: {segmented_info['likely_broadcast_domain']}\n"
+                f"Network may be segmented into {segmented_info['segments']} /24 segments (VLANs).\n\n"
+                "ISSUE: The current implementation uses UDP broadcast discovery, which only\n"
+                "reaches devices in the same broadcast domain (typically /24 segment).\n"
+                "If servers are on different network segments, they will NOT be discovered.\n\n"
+                "LIMITATION: This module is not ready to handle segmented networks yet.\n"
+                "Broadcast packets may only reach devices on the same /24 segment as your client.\n\n"
+                "NOTE: No servers were found. This may be due to network segmentation.\n"
+                "If servers are on a different network segment, they won't receive the broadcast.\n\n"
+                "WORKAROUNDS:\n"
+                "  1. Ensure servers are on the same /24 segment as the client\n"
+                "  2. Use direct IP connection if server IP is known\n"
+                "  3. Implement subnet scanning for known IP ranges\n"
+                "  4. Contact network administrator for broadcast permissions\n"
+                "=" * 70
+            )
+        elif segmented_info and unique_results:
+            # Servers were found on segmented network - just log info, no warning
+            logger.debug(
+                f"Segmented network detected, but {len(unique_results)} server(s) found. "
+                "Servers are on the same network segment as your client."
             )
         
         return unique_results
