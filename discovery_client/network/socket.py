@@ -519,6 +519,13 @@ def discover_servers_multi_interface(config: ClientConfig) -> List[DiscoveryResu
         # Detect segmented networks - we'll check after discovery to see if warning is needed
         # Store the info but don't warn yet - we'll warn only if no servers are found
         segmented_info = detect_segmented_network(interfaces)
+        if segmented_info:
+            logger.info(
+                "Network topology note: possible segmented corporate network detected "
+                f"({segmented_info['network']}, ~{segmented_info['segments']} segments). "
+                "UDP broadcast discovery typically only reaches the local broadcast domain "
+                f"(likely {segmented_info['likely_broadcast_domain']})."
+            )
     except ImportError as e:
         logger.error(
             f"Failed to enumerate network interfaces: {e}. "
@@ -607,8 +614,9 @@ def discover_servers_multi_interface(config: ClientConfig) -> List[DiscoveryResu
                 "WORKAROUNDS:\n"
                 "  1. Ensure servers are on the same /24 segment as the client\n"
                 "  2. Use direct IP connection if server IP is known\n"
-                "  3. Implement subnet scanning for known IP ranges\n"
-                "  4. Contact network administrator for broadcast permissions\n"
+                "  3. Increase timeout (e.g., 10s) and enable DEBUG logging to confirm sends/receives\n"
+                "  4. Contact network administrator about VLAN/broadcast/multicast policies\n"
+                "  5. Future: use hybrid broadcast + unicast scanning (planned)\n"
                 "=" * 70
             )
         elif segmented_info and unique_results:
