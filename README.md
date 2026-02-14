@@ -14,13 +14,20 @@ A pure Python client library for discovering `django-udp-discovery` servers on l
 
 ## Installation
 
+For **multi-interface discovery** (sending broadcasts on all interfaces and filtering by whitelist/blacklist), install the `[network]` extra. This pulls in `netifaces` or `ifaddr` for interface enumeration. Without it, discovery may raise `ImportError` when selecting interfaces.
+
+```bash
+# Recommended: install with network support for full multi-interface discovery
+pip install django-udp-discovery-client[network]
+```
+
 ### From PyPI (when published)
 
 ```bash
 # Basic installation (pure Python, no Django required)
 pip install django-udp-discovery-client
 
-# With network interface support
+# With network interface support (recommended for multi-interface discovery)
 pip install django-udp-discovery-client[network]
 
 # With Django integration (management command)
@@ -373,6 +380,40 @@ INFO - django_udp_discovery_client - Discovery complete: 1 server(s) found
 **Note**: This client is a **pure Python library** and does **not require Django** for basic usage. It can be used from any Python script to discover `django-udp-discovery` servers. Django is only required:
 - On the **server side** (when using `django-udp-discovery`)
 - For the **optional Django integration** (management command)
+
+## Verifying Installation
+
+After installing the package (e.g. `pip install django-udp-discovery-client[network]`), you can run a **sanity check** to confirm discovery works on your machine:
+
+1. Clone the repository (if you don’t already have it):
+   ```bash
+   git clone https://github.com/Ogro-Projukti/django-udp-discovery-client.git
+   cd django-udp-discovery-client
+   ```
+
+2. Install the package with the optional network stack (for multi-interface discovery):
+   ```bash
+   pip install ".[network]"
+   ```
+
+3. Run the sanity check script from the project root:
+   ```bash
+   python scripts/sanity_check.py
+   ```
+
+The script will:
+
+- List active network interfaces and the **broadcast addresses** used for discovery
+- Run discovery and print a table of any discovered servers (IP, port, response)
+- If no servers are found on a **segmented network** (e.g. large corporate subnet), print a short explanation and workarounds
+
+Use this to confirm the library works in your environment and to troubleshoot “no servers found” (e.g. segmented networks, firewall, or no servers running).
+
+## Known Limitations
+
+- **IPv4 only** — Discovery uses IPv4 only. IPv6 is not supported.
+- **UDP broadcast only** — Discovery uses UDP broadcast to the local subnet. Multicast is not supported. Servers on other subnets or VLANs (outside the same broadcast domain) are not discoverable.
+- **Blocking API** — `discover()` and `discover_one()` are blocking: they send broadcasts and wait for responses until the configured timeout. There is no async or non-blocking API.
 
 ## Contributing
 
