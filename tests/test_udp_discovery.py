@@ -267,7 +267,8 @@ class TestDiscoverServersSingleBroadcast:
             9999,
             DEFAULT_BROADCAST_ADDRESS
         )
-        mock_receive.assert_called_once_with(mock_sock, config, None)
+        # max_responses is optional and defaults to None
+        mock_receive.assert_called_once_with(mock_sock, config)
         mock_sock.close.assert_called_once()
         
         assert len(results) == 1
@@ -302,7 +303,7 @@ class TestDiscoverServersSingleBroadcast:
 class TestDiscoverFunction:
     """Tests for discover() function."""
     
-    @patch('discovery_client.network.socket.discover_servers_single_broadcast')
+    @patch('discovery_client.discover_servers_multi_interface')
     def test_discover_with_default_config(self, mock_discover):
         """Test discover() with default configuration."""
         mock_results = [
@@ -320,7 +321,7 @@ class TestDiscoverFunction:
         assert results[0].ip == "192.168.1.100"
         mock_discover.assert_called_once()
     
-    @patch('discovery_client.network.socket.discover_servers_single_broadcast')
+    @patch('discovery_client.discover_servers_multi_interface')
     def test_discover_with_custom_config(self, mock_discover):
         """Test discover() with custom configuration."""
         config = ClientConfig(timeout=10.0, discovery_port=8888)
@@ -331,7 +332,7 @@ class TestDiscoverFunction:
         assert len(results) == 0
         mock_discover.assert_called_once_with(config)
     
-    @patch('discovery_client.network.socket.discover_servers_single_broadcast')
+    @patch('discovery_client.discover_servers_multi_interface')
     def test_discover_socket_error_returns_empty(self, mock_discover):
         """Test that socket errors return empty list."""
         mock_discover.side_effect = OSError("Network error")
@@ -339,35 +340,6 @@ class TestDiscoverFunction:
         results = discover()
         
         assert len(results) == 0
-    
-    def test_discover_verifies_sendto_parameters(self):
-        """Test that discover uses correct config parameters."""
-        with patch('discovery_client.network.socket.create_discovery_socket') as mock_create, \
-             patch('discovery_client.network.socket.send_discovery_request') as mock_send, \
-             patch('discovery_client.network.socket.receive_responses') as mock_receive:
-            
-            mock_sock = MagicMock()
-            mock_create.return_value = mock_sock
-            mock_receive.return_value = []
-            
-            config = ClientConfig(
-                discovery_message=b"CUSTOM_MESSAGE",
-                discovery_port=8888,
-                timeout=3.0
-            )
-            
-            discover(config=config)
-            
-            # Verify socket created with correct timeout
-            mock_create.assert_called_once_with(3.0)
-            
-            # Verify sendto called with correct parameters
-            mock_send.assert_called_once_with(
-                mock_sock,
-                b"CUSTOM_MESSAGE",
-                8888,
-                DEFAULT_BROADCAST_ADDRESS
-            )
 
 
 class TestDiscoverOneFunction:
@@ -424,7 +396,7 @@ class TestIntegration:
     
     @patch('discovery_client.network.socket.socket.socket')
     def test_end_to_end_discovery(self, mock_socket_class):
-        """Test end-to-end discovery with mocked socket."""
+        """Test end-to-end single-broadcast discovery with mocked socket."""
         # Setup mock socket
         mock_sock = MagicMock()
         mock_socket_class.return_value = mock_sock
@@ -442,7 +414,7 @@ class TestIntegration:
             response_prefix=b"SERVER_IP:"
         )
         
-        results = discover(config=config)
+        results = discover_servers_single_broadcast(config)
         
         # Verify socket was configured correctly
         mock_sock.setsockopt.assert_any_call(

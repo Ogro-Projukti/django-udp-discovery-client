@@ -122,6 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Known Limitations
 
 - **Broadcast Only**: Currently uses UDP broadcast (multicast support planned)
+- **VLAN / Segmented Networks**: UDP broadcast discovery typically does not cross routers and may only reach the local broadcast domain (commonly a `/24` segment). On corporate networks segmented into VLANs, servers on other segments may not be discoverable yet. Hybrid broadcast + unicast scanning is planned.
 - **No Retry Logic**: Single discovery attempt per call (retry logic planned)
 - **IPv4 Only**: IPv6 support not yet implemented
 

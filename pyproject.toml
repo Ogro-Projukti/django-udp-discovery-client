@@ -78,3 +78,6 @@ Documentation = "https://github.com/Ogro-Projukti/django-udp-discovery-client#re
 where = ["."]
 include = ["discovery_client*", "discovery_client_django*"]
 
+[tool.setuptools.package-data]
+discovery_client = ["py.typed"]
+
