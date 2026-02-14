@@ -306,7 +306,7 @@ class TestDiscoverServersMultiInterface:
 class TestDiscoverFunctionMultiInterface:
     """Tests for discover() function using multi-interface discovery."""
     
-    @patch('discovery_client.network.socket.discover_servers_multi_interface')
+    @patch('discovery_client.discover_servers_multi_interface')
     def test_discover_uses_multi_interface(self, mock_discover):
         """Test that discover() uses multi-interface discovery."""
         mock_discover.return_value = []

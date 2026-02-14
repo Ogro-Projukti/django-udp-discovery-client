@@ -144,7 +144,7 @@ class TestReceiveResponsesLogging:
 class TestDiscoverErrorHandling:
     """Tests for error handling in discover() function."""
     
-    @patch('discovery_client.network.socket.discover_servers_multi_interface')
+    @patch('discovery_client.discover_servers_multi_interface')
     def test_discover_oserror_returns_empty_list(self, mock_discover, caplog):
         """Test that OSError returns empty list and is logged."""
         with caplog.at_level(logging.ERROR):
@@ -156,7 +156,7 @@ class TestDiscoverErrorHandling:
             assert any("Network error during discovery" in record.message for record in caplog.records)
             assert any(record.levelname == "ERROR" for record in caplog.records)
     
-    @patch('discovery_client.network.socket.discover_servers_multi_interface')
+    @patch('discovery_client.discover_servers_multi_interface')
     def test_discover_importerror_returns_empty_list(self, mock_discover, caplog):
         """Test that ImportError returns empty list and is logged."""
         with caplog.at_level(logging.ERROR):
@@ -168,7 +168,7 @@ class TestDiscoverErrorHandling:
             assert any("Missing network interface libraries" in record.message for record in caplog.records)
             assert any(record.levelname == "ERROR" for record in caplog.records)
     
-    @patch('discovery_client.network.socket.discover_servers_multi_interface')
+    @patch('discovery_client.discover_servers_multi_interface')
     def test_discover_unexpected_error_returns_empty_list(self, mock_discover, caplog):
         """Test that unexpected errors return empty list and are logged."""
         with caplog.at_level(logging.ERROR):
@@ -180,7 +180,7 @@ class TestDiscoverErrorHandling:
             assert any("Unexpected error during discovery" in record.message for record in caplog.records)
             assert any(record.levelname == "ERROR" for record in caplog.records)
     
-    @patch('discovery_client.network.socket.discover_servers_multi_interface')
+    @patch('discovery_client.discover_servers_multi_interface')
     def test_discover_success_logs_info(self, mock_discover, caplog):
         """Test that successful discovery is logged."""
         with caplog.at_level(logging.INFO):
@@ -197,7 +197,7 @@ class TestDiscoverErrorHandling:
 class TestDiscoverOneErrorHandling:
     """Tests for error handling in discover_one() function."""
     
-    @patch('discovery_client.network.socket.discover_servers_multi_interface')
+    @patch('discovery_client.discover_servers_multi_interface')
     def test_discover_one_oserror_returns_none(self, mock_discover, caplog):
         """Test that discover_one returns None when discover() fails."""
         with caplog.at_level(logging.ERROR):
@@ -207,7 +207,7 @@ class TestDiscoverOneErrorHandling:
             
             assert result is None
     
-    @patch('discovery_client.network.socket.discover_servers_multi_interface')
+    @patch('discovery_client.discover_servers_multi_interface')
     def test_discover_one_success_logs_debug(self, mock_discover, caplog):
         """Test that discover_one logs debug messages."""
         with caplog.at_level(logging.DEBUG):

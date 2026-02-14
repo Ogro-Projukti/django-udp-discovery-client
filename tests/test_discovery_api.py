@@ -12,6 +12,7 @@ from discovery_client import (
     load_config,
 )
 from typing import List, Optional
+from unittest.mock import patch
 
 
 class TestImports:
@@ -214,15 +215,13 @@ class TestDiscoverFunction:
         assert 'List' in str(return_annotation) or 'list' in str(return_annotation).lower()
         assert 'DiscoveryResult' in str(return_annotation)
     
-    def test_discover_not_implemented(self):
-        """Test that discover() raises NotImplementedError (stub implementation)."""
-        with pytest.raises(NotImplementedError):
-            discover()
-        
-        # Should also raise with config
-        config = load_config()
-        with pytest.raises(NotImplementedError):
-            discover(config=config)
+    @patch("discovery_client.discover_servers_multi_interface")
+    def test_discover_calls_multi_interface_and_returns_list(self, mock_discover):
+        """Test that discover() calls the multi-interface implementation and returns its results."""
+        mock_discover.return_value = []
+        results = discover()
+        assert isinstance(results, list)
+        mock_discover.assert_called_once()
     
     def test_discover_docstring(self):
         """Test that discover() has documentation."""
@@ -256,18 +255,19 @@ class TestDiscoverOneFunction:
         return_annotation = sig.return_annotation
         
         # Should return Optional[DiscoveryResult]
-        assert 'Optional' in str(return_annotation) or 'optional' in str(return_annotation).lower()
+        # Python versions may represent this as Optional[T] or T | None
+        assert (
+            'Optional' in str(return_annotation)
+            or 'optional' in str(return_annotation).lower()
+            or 'None' in str(return_annotation)
+        )
         assert 'DiscoveryResult' in str(return_annotation)
     
-    def test_discover_one_not_implemented(self):
-        """Test that discover_one() raises NotImplementedError (stub implementation)."""
-        with pytest.raises(NotImplementedError):
-            discover_one()
-        
-        # Should also raise with config
-        config = load_config()
-        with pytest.raises(NotImplementedError):
-            discover_one(config=config)
+    @patch("discovery_client.discover_servers_multi_interface")
+    def test_discover_one_returns_none_when_no_servers(self, mock_discover):
+        """Test that discover_one() returns None when no servers are found."""
+        mock_discover.return_value = []
+        assert discover_one() is None
     
     def test_discover_one_docstring(self):
         """Test that discover_one() has documentation."""

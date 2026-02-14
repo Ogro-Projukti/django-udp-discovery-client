@@ -43,8 +43,10 @@ class ClientConfig:
         discovery_message: Message to send for discovery (default: "DISCOVER_SERVER")
         response_prefix: Expected prefix in server responses (default: "SERVER_IP:")
         timeout: Timeout in seconds for discovery operations (default: 5.0)
-        retries: Number of retry attempts (default: 3)
-        enable_subnet_scan: Whether to scan entire subnet (default: True)
+        retries: Number of retry attempts (default: 3).
+            Reserved for future use: retry logic is not currently implemented.
+        enable_subnet_scan: Whether to scan entire subnet (default: True).
+            Reserved for future use: subnet/VLAN unicast scanning is not currently implemented.
         interfaces_whitelist: Optional list of network interfaces to use
         interfaces_blacklist: Optional list of network interfaces to exclude
     """

@@ -83,3 +83,6 @@ packages = [
     "discovery_client_django.management.commands",
 ]
 
+[tool.setuptools.package-data]
+discovery_client = ["py.typed"]
+
