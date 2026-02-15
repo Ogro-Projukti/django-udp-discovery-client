@@ -9,6 +9,11 @@ Usage:
 from django.core.management.base import BaseCommand
 from django.core.management import CommandError
 from discovery_client import discover, ClientConfig, DiscoveryResult
+from discovery_client.network.socket import (
+    detect_segmented_network,
+    format_segmented_network_warning,
+)
+from discovery_client.network.interfaces import select_interfaces
 from typing import List
 
 
@@ -105,6 +110,16 @@ class Command(BaseCommand):
             self.stdout.write(
                 'Make sure django-udp-discovery servers are running and accessible.'
             )
+            # Print segmented network diagnostic exactly once, after all interfaces scanned
+            try:
+                interfaces = select_interfaces(config)
+                segmented_info = detect_segmented_network(interfaces) if interfaces else None
+                if segmented_info:
+                    self.stdout.write(
+                        format_segmented_network_warning(segmented_info, width=40)
+                    )
+            except ImportError:
+                pass
             return
         
         # Print table of discovered servers

@@ -441,6 +441,37 @@ def detect_segmented_network(interfaces: List[InterfaceInfo]) -> Optional[dict]:
     return None
 
 
+def format_segmented_network_warning(segmented_info: dict, width: int = 40) -> str:
+    """
+    Format the "Segmented Network Detected" diagnostic message for display.
+    Used by management command and sanity_check to print exactly once per run.
+    """
+    sep = "=" * width
+    return (
+        f"{sep}\n"
+        "WARNING: Segmented Network Detected\n"
+        f"{sep}\n"
+        f"Interface: {segmented_info['interface']} ({segmented_info['ip']})\n"
+        f"Network: {segmented_info['network']} ({segmented_info['total_hosts']:,} hosts)\n"
+        f"Calculated broadcast: {segmented_info['calculated_broadcast']}\n"
+        f"Likely broadcast domain: {segmented_info['likely_broadcast_domain']}\n"
+        f"Network may be segmented into {segmented_info['segments']} /24 segments (VLANs).\n\n"
+        "ISSUE: The current implementation uses UDP broadcast discovery, which only\n"
+        "reaches devices in the same broadcast domain (typically /24 segment).\n"
+        "If servers are on different network segments, they will NOT be discovered.\n\n"
+        "LIMITATION: This module is not ready to handle segmented networks yet.\n"
+        "Broadcast packets may only reach devices on the same /24 segment as your client.\n\n"
+        "NOTE: No servers were found. This may be due to network segmentation.\n"
+        "If servers are on a different network segment, they won't receive the broadcast.\n\n"
+        "WORKAROUNDS:\n"
+        "  1. Ensure servers are on the same /24 segment as the client\n"
+        "  2. Use direct IP connection if server IP is known\n"
+        "  3. Implement subnet scanning for known IP ranges\n"
+        "  4. Contact network administrator for broadcast permissions\n"
+        f"{sep}"
+    )
+
+
 def deduplicate_results(results: List[DiscoveryResult]) -> List[DiscoveryResult]:
     """
     Remove duplicate DiscoveryResult objects based on (ip, port) key.
@@ -519,6 +550,13 @@ def discover_servers_multi_interface(config: ClientConfig) -> List[DiscoveryResu
         # Detect segmented networks - we'll check after discovery to see if warning is needed
         # Store the info but don't warn yet - we'll warn only if no servers are found
         segmented_info = detect_segmented_network(interfaces)
+        if segmented_info:
+            logger.info(
+                "Network topology note: possible segmented corporate network detected "
+                f"({segmented_info['network']}, ~{segmented_info['segments']} segments). "
+                "UDP broadcast discovery typically only reaches the local broadcast domain "
+                f"(likely {segmented_info['likely_broadcast_domain']})."
+            )
     except ImportError as e:
         logger.error(
             f"Failed to enumerate network interfaces: {e}. "
@@ -584,32 +622,11 @@ def discover_servers_multi_interface(config: ClientConfig) -> List[DiscoveryResu
                 f"Deduplicated {len(results)} responses to {len(unique_results)} unique servers"
             )
         
-        # Only warn about segmented networks if NO servers were found
-        # If servers are found, the network is working (even if segmented)
-        # This prevents false warnings on mobile hotspot networks where discovery works fine
+        # Segmented network warning is printed once by the caller (management command or
+        # sanity_check) when results are empty; we only log at debug here to avoid duplication.
         if segmented_info and not unique_results:
-            logger.warning(
-                "=" * 70 + "\n"
-                "WARNING: Segmented Network Detected\n"
-                "=" * 70 + "\n"
-                f"Interface: {segmented_info['interface']} ({segmented_info['ip']})\n"
-                f"Network: {segmented_info['network']} ({segmented_info['total_hosts']:,} hosts)\n"
-                f"Calculated broadcast: {segmented_info['calculated_broadcast']}\n"
-                f"Likely broadcast domain: {segmented_info['likely_broadcast_domain']}\n"
-                f"Network may be segmented into {segmented_info['segments']} /24 segments (VLANs).\n\n"
-                "ISSUE: The current implementation uses UDP broadcast discovery, which only\n"
-                "reaches devices in the same broadcast domain (typically /24 segment).\n"
-                "If servers are on different network segments, they will NOT be discovered.\n\n"
-                "LIMITATION: This module is not ready to handle segmented networks yet.\n"
-                "Broadcast packets may only reach devices on the same /24 segment as your client.\n\n"
-                "NOTE: No servers were found. This may be due to network segmentation.\n"
-                "If servers are on a different network segment, they won't receive the broadcast.\n\n"
-                "WORKAROUNDS:\n"
-                "  1. Ensure servers are on the same /24 segment as the client\n"
-                "  2. Use direct IP connection if server IP is known\n"
-                "  3. Implement subnet scanning for known IP ranges\n"
-                "  4. Contact network administrator for broadcast permissions\n"
-                "=" * 70
+            logger.debug(
+                "Segmented network detected and no servers found; caller will print diagnostic."
             )
         elif segmented_info and unique_results:
             # Servers were found on segmented network - just log info, no warning
