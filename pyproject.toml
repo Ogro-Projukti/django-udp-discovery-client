@@ -74,6 +74,7 @@ Issues = "https://github.com/Ogro-Projukti/django-udp-discovery-client/issues"
 Documentation = "https://github.com/Ogro-Projukti/django-udp-discovery-client#readme"
 
 [tool.setuptools.packages.find]
+# Wheel and sdist: only these packages are shipped (audit, dev_test, tests, docs excluded via MANIFEST.in)
 where = ["."]
 include = ["discovery_client*", "discovery_client_django*"]
 

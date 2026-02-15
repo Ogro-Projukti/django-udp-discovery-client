@@ -1,4 +1,4 @@
-# Source distribution: only metadata and package source (no internal docs)
+# Source distribution: only metadata and package source (no audit, dev, tests, or internal docs)
 include LICENSE
 include README.md
 include CHANGELOG.md
@@ -6,5 +6,7 @@ include pyproject.toml
 include discovery_client/py.typed
 recursive-include discovery_client *.py
 recursive-include discovery_client_django *.py
+prune audit
+prune dev_test
 prune docs
 prune tests
