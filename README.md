@@ -1,485 +1,221 @@
 # django-udp-discovery-client
 
-A pure Python client library for discovering `django-udp-discovery` servers on local networks using UDP broadcast. This library works as a standalone Python package and does not require Django.
+Pure Python client for discovering [django-udp-discovery](https://github.com/Ogro-Projukti/django-udp-discovery) servers on local networks via UDP broadcast. No Django required for core usage.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Django Integration](#django-integration)
+- [Configuration](#configuration)
+- [Verifying Installation](#verifying-installation)
+- [Logging](#logging)
+- [Technical Considerations](#technical-considerations)
+- [Requirements](#requirements)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
 
 ## Features
 
-- **UDP-based service discovery** - Discover `django-udp-discovery` servers on local networks
-- **Multi-interface support** - Automatically discovers servers across all network interfaces
-- **Pure Python library** - No Django required (works with any Python script)
-- **Simple API** - Easy-to-use `discover()` and `discover_one()` functions
-- **Cross-platform** - Works on Windows, Linux, and macOS
-- **Configurable** - Environment variable support and runtime configuration
-- **Robust error handling** - Graceful failure with comprehensive logging
+- **Broadcast discovery** — Send UDP discovery requests and collect `SERVER_IP:` responses from servers on the same broadcast domain.
+- **Multi-interface support** — Discover across all (or selected) IPv4 interfaces; broadcast per interface, deduplicate results by `(ip, port)`. Requires the `[network]` extra.
+- **Django integration (optional)** — Management command `python manage.py discover_servers` when `discovery_client_django` is in `INSTALLED_APPS`; install with `[django]` extra.
+- **Configurable** — `ClientConfig` / `load_config()` with env vars (`DISCOVERY_CLIENT_*`) and runtime overrides; interface whitelist/blacklist.
+- **Cross-platform** — Windows, Linux, macOS. Optional deps: `netifaces` or `ifaddr` for interface enumeration, Django for the management command.
 
-## Known Limitations
-
-### VLAN / Segmented Corporate Networks
-
-This client currently uses **UDP broadcast** for discovery. UDP broadcasts typically **do not cross routers** and therefore usually only reach devices in the **same broadcast domain** (commonly a `/24` segment).
-
-If you are on a large corporate network (for example `10.x.x.x` or `172.16-31.x.x`) that is segmented into multiple VLANs, discovery may return **no servers** even if servers exist on other segments.
-
-**Workarounds:**
-- **Same segment**: ensure the server and client are on the same `/24` segment/VLAN.
-- **Known server IP**: connect directly if you already know the server’s IP.
-- **Network admin help**: ask if broadcast/multicast discovery is permitted between segments.
-
-**Roadmap:** After the initial release, VLAN support is planned via a **hybrid approach** (broadcast + targeted unicast scanning).
+---
 
 ## Installation
 
-For **multi-interface discovery** (sending broadcasts on all interfaces and filtering by whitelist/blacklist), install the `[network]` extra. This pulls in `netifaces` or `ifaddr` for interface enumeration. Without it, discovery may raise `ImportError` when selecting interfaces.
+**Base install** (core only; multi-interface discovery needs interface enumeration and will fail without the network extra):
 
 ```bash
-# Recommended: install with network support for full multi-interface discovery
+pip install django-udp-discovery-client
+```
+
+**Recommended** — with network support for multi-interface discovery (requires `netifaces` or `ifaddr`):
+
+```bash
 pip install django-udp-discovery-client[network]
 ```
 
-### From PyPI (when published)
+**With Django** (for the management command only):
 
 ```bash
-# Basic installation (pure Python, no Django required)
-pip install django-udp-discovery-client
-
-# With network interface support (recommended for multi-interface discovery)
-pip install django-udp-discovery-client[network]
-
-# With Django integration (management command)
 pip install django-udp-discovery-client[django]
+```
 
-# With all optional dependencies
+**All extras**:
+
+```bash
 pip install django-udp-discovery-client[all]
 ```
 
-### From source
+**From source**:
 
 ```bash
 git clone https://github.com/Ogro-Projukti/django-udp-discovery-client.git
 cd django-udp-discovery-client
 pip install .
-
-# Or with optional dependencies
-pip install ".[network,django]"
+pip install ".[network]"   # recommended for multi-interface
 ```
 
-### Development installation
-
-```bash
-git clone https://github.com/Ogro-Projukti/django-udp-discovery-client.git
-cd django-udp-discovery-client
-pip install -e .
-
-# Or with optional dependencies
-pip install -e ".[network,django]"
-```
+---
 
 ## Quick Start
 
-### Basic Usage
+### Basic Python (no Django)
 
 ```python
-from discovery_client import discover, discover_one, DiscoveryResult
+from discovery_client import discover, discover_one
 
-# Discover all servers on the local network
+# Discover all servers
 servers = discover()
-for server in servers:
-    print(f"Found server: {server.ip}:{server.port}")
-    print(f"  Raw response: {server.raw_response}")
+for s in servers:
+    print(f"{s.ip}:{s.port}")  # DiscoveryResult
 
-# Discover a single server (returns first found)
+# Or just the first
 server = discover_one()
 if server:
-    print(f"Found server at {server.ip}:{server.port}")
-else:
-    print("No servers found")
+    print(server.ip, server.port)
 ```
 
-### Using with django-udp-discovery
+### Django: server setup and management command
 
-This client is designed to work with `django-udp-discovery` servers. Here's a complete example:
-
-**1. Django Server Setup** (using django-udp-discovery)
-
-In your Django project's `settings.py`:
+**1. Server** (django-udp-discovery) — in `settings.py`:
 
 ```python
 INSTALLED_APPS = [
-    # ... other apps
+    # ...
     'django_udp_discovery',
 ]
-
-# django-udp-discovery configuration
-DISCOVERY_PORT = 9999  # Default discovery port
-DISCOVERY_MESSAGE = "DISCOVER_SERVER"  # Discovery message
-DISCOVERY_RESPONSE_PREFIX = "SERVER_IP:"  # Response prefix
+# Optional: DISCOVERY_PORT = 9999, DISCOVERY_MESSAGE = "DISCOVER_SERVER", etc.
 ```
 
-**2. Python Client Script**
-
-Create a simple Python script to discover the Django server:
+**2. Client** — discover from any Python script or from Django:
 
 ```python
-#!/usr/bin/env python3
-"""
-Example script to discover django-udp-discovery servers.
-This script works as a pure Python library - no Django required.
-"""
-from discovery_client import discover, discover_one, ClientConfig
-
-# Option 1: Discover all servers
-print("Discovering all servers...")
+from discovery_client import discover
 servers = discover()
-print(f"Found {len(servers)} server(s):")
-for server in servers:
-    print(f"  - {server.ip}:{server.port}")
-    server_url = f"http://{server.ip}:{server.port}"
-    print(f"    URL: {server_url}")
-
-# Option 2: Discover just one server
-print("\nDiscovering single server...")
-server = discover_one()
-if server:
-    print(f"Found server at {server.ip}:{server.port}")
-    print(f"Server URL: http://{server.ip}:{server.port}")
-else:
-    print("No servers found")
-
-# Option 3: Custom configuration
-print("\nUsing custom configuration...")
-config = ClientConfig(
-    timeout=10.0,  # Wait up to 10 seconds
-    discovery_port=9999,  # Discovery port
-)
-servers = discover(config=config)
-print(f"Found {len(servers)} server(s) with custom config")
+for s in servers:
+    url = f"http://{s.ip}:{s.port}"
 ```
 
-**3. Run the Example**
-
-```bash
-# Terminal 1: Start your Django server with django-udp-discovery
-python manage.py runserver 0.0.0.0:8000
-
-# Terminal 2: Run the discovery client script
-python discover_servers.py
-```
-
-**Note**: This client is a **pure Python library** and does not require Django. It can be used from any Python script to discover `django-udp-discovery` servers on your local network.
-
-### Optional Django Integration
-
-This package includes an optional Django integration that provides a management command for discovering servers from within Django projects.
-
-**Installation:**
-
-```bash
-# Install with Django integration
-pip install django-udp-discovery-client[django]
-
-# Or install all optional dependencies
-pip install django-udp-discovery-client[all]
-```
-
-**Setup:**
-
-Add `discovery_client_django` to your Django project's `INSTALLED_APPS` in `settings.py`:
+**3. Optional Django integration** — in your Django project `settings.py`:
 
 ```python
 INSTALLED_APPS = [
-    # ... other apps
+    # ...
     'discovery_client_django',
 ]
 ```
 
-**Usage:**
-
-Run the management command to discover servers:
+Then run:
 
 ```bash
-# Basic usage
 python manage.py discover_servers
-
-# With custom timeout
-python manage.py discover_servers --timeout 10.0
-
-# With custom port
-python manage.py discover_servers --port 9999
-
-# With interface filtering
-python manage.py discover_servers --interfaces-whitelist "eth0,wlan0"
-
-# Verbose output (shows raw responses)
-python manage.py discover_servers --verbose
-
-# See all options
-python manage.py discover_servers --help
+python manage.py discover_servers --timeout 10.0 --port 9999 --verbose
 ```
 
-**Example Output:**
+---
 
-```
-Found 2 server(s):
+## Configuration
 
-IP Address         Port     URL
---------------------------------------------------
-192.168.1.100      8000     http://192.168.1.100:8000
-192.168.1.101      8001     http://192.168.1.101:8001
-```
+Use `ClientConfig` or `load_config()`. Priority: **defaults** &lt; **environment variables** (`DISCOVERY_CLIENT_*`) &lt; **keyword overrides**.
 
-**Note**: The Django integration is **optional**. The core `discovery_client` package works perfectly fine without Django and can be used from any Python script.
+| Environment variable | Description | Example |
+|----------------------|-------------|---------|
+| `DISCOVERY_CLIENT_PORT` | Discovery UDP port | `9999` |
+| `DISCOVERY_CLIENT_MESSAGE` | Discovery message | `DISCOVER_SERVER` |
+| `DISCOVERY_CLIENT_RESPONSE_PREFIX` | Response prefix | `SERVER_IP:` |
+| `DISCOVERY_CLIENT_TIMEOUT` | Timeout (seconds) | `5.0` |
+| `DISCOVERY_CLIENT_RETRIES` | Retries (reserved) | `3` |
+| `DISCOVERY_CLIENT_ENABLE_SUBNET_SCAN` | Subnet scan (reserved) | `true` |
+| `DISCOVERY_CLIENT_INTERFACES_WHITELIST` | Comma-separated interface names | `eth0,wlan0` |
+| `DISCOVERY_CLIENT_INTERFACES_BLACKLIST` | Comma-separated interface names | `docker0,lo` |
 
-### DiscoveryResult
-
-The `discover()` and `discover_one()` functions return `DiscoveryResult` objects:
+Example with overrides:
 
 ```python
-from discovery_client import DiscoveryResult
-
-# DiscoveryResult fields:
-result.ip            # IPv4 address (str): "192.168.1.100"
-result.port           # Port number (int): 8000
-result.raw_response   # Raw bytes received: b"SERVER_IP:192.168.1.100:8000"
-result.extra          # Optional metadata dict (for future use)
+from discovery_client import load_config, discover
+config = load_config(timeout=10.0, discovery_port=8888)
+servers = discover(config=config)
 ```
 
-### Discovery Protocol
+Interface filtering: `ClientConfig(interfaces_whitelist=["eth0"], interfaces_blacklist=["docker0"])`. Names are case-sensitive and exact.
 
-This client implements the discovery protocol for `django-udp-discovery` servers:
-
-- **Discovery Message**: `"DISCOVER_SERVER"` (sent via UDP broadcast)
-- **Response Prefix**: `"SERVER_IP:"` (expected in server responses)
-- **Response Format**: `"SERVER_IP:<ip>:<port>"` (e.g., `"SERVER_IP:192.168.1.100:8000"`)
-
-The client sends UDP discovery requests and collects responses from servers that match the protocol.
-
-**Multi-Interface Discovery:**
-- Discovery automatically sends broadcast packets to each selected network interface
-- Broadcast addresses are derived from each interface's IP and netmask
-- If an interface lacks a broadcast address, it is automatically computed
-- Results are deduplicated by (ip, port) to ensure each server appears only once
-- Interface selection respects whitelist/blacklist configuration (see Interface Selection & Filtering)
-
-**Note on Config Options:**
-- `retries` and `enable_subnet_scan` exist in `ClientConfig` but are **reserved for future releases** (retry logic and hybrid broadcast+unicast scanning).
-
-### Interface Selection & Filtering
-
-You can control which network interfaces are used for discovery using whitelist and blacklist filters:
-
-```python
-from discovery_client import ClientConfig, load_config
-from discovery_client.network.interfaces import select_interfaces
-
-# Whitelist: only use specific interfaces
-config = ClientConfig(interfaces_whitelist=["eth0", "wlan0"])
-interfaces = select_interfaces(config)
-# Returns only eth0 and wlan0 interfaces
-
-# Blacklist: exclude specific interfaces
-config = ClientConfig(interfaces_blacklist=["docker0", "veth*"])
-interfaces = select_interfaces(config)
-# Returns all interfaces except docker0 and veth* interfaces
-
-# Both: whitelist first, then apply blacklist
-config = ClientConfig(
-    interfaces_whitelist=["eth0", "eth1", "wlan0"],
-    interfaces_blacklist=["eth1"]
-)
-interfaces = select_interfaces(config)
-# Returns eth0 and wlan0 (eth1 is blacklisted even though whitelisted)
-```
-
-**Filtering Rules:**
-- **Whitelist**: If set, only interfaces whose `name` is in the whitelist are included
-- **Blacklist**: If set, interfaces whose `name` is in the blacklist are excluded
-- **Order**: Whitelist is applied first, then blacklist
-- **Matching**: Interface name matching is **case-sensitive** and **exact** (e.g., `"eth0"` ≠ `"Eth0"`)
-- **No filters**: If neither whitelist nor blacklist is set, all non-loopback interfaces are returned
-
-**Configuration via Environment Variables:**
-```bash
-# Comma-separated interface names
-export DISCOVERY_CLIENT_INTERFACES_WHITELIST="eth0,wlan0"
-export DISCOVERY_CLIENT_INTERFACES_BLACKLIST="docker0,lo"
-```
-
-### Using in Django Code
-
-You can use the discovery client in your Django views, management commands, or any Django code:
-
-```python
-# In your Django views or management commands
-from discovery_client import discover, load_config
-
-# Discover available servers with custom timeout
-config = load_config(timeout=5.0)
-available_servers = discover(config=config)
-
-# Use discovered servers
-for server in available_servers:
-    server_url = f"http://{server.ip}:{server.port}"
-    # Use server_url in your Django application
-```
-
-## Troubleshooting
-
-### No servers found
-
-Common causes:
-- **Server not running** or not listening on UDP discovery port (default `9999`).
-- **Firewall** blocks UDP `9999` on the server machine.
-- **VLAN/segmentation**: server is on a different broadcast domain (see **Known Limitations**).
-- **Wrong interface selection** due to whitelist/blacklist filters.
-
-Quick checks:
-- **Enable debug logs**:
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-```
-
-- **Increase timeout**:
-
-```python
-from discovery_client import ClientConfig, discover
-servers = discover(ClientConfig(timeout=10.0))
-```
-
-- **Verify interface filters** (if you set them):
-  - `interfaces_whitelist` must match interface names exactly (case-sensitive).
-  - Remove filters to try all non-loopback interfaces.
-
-## Logging
-
-The library uses Python's standard `logging` module with the logger name `django_udp_discovery_client`. You can configure logging to see discovery operations and debug network issues.
-
-### Basic Logging Configuration
-
-```python
-import logging
-
-# Configure logging for discovery client
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-```
-
-### Django Logging Configuration
-
-Add this to your Django `settings.py` to enable discovery client logging:
-
-```python
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        },
-    },
-    'loggers': {
-        'django_udp_discovery_client': {
-            'handlers': ['console'],
-            'level': 'INFO',  # Use 'DEBUG' for detailed discovery logs
-            'propagate': False,
-        },
-    },
-}
-```
-
-### Log Levels
-
-- **DEBUG**: Detailed information about socket operations, response parsing, and interface selection
-- **INFO**: Discovery start/stop, servers found, and timeouts
-- **WARNING**: Invalid responses, interface send failures, missing broadcast addresses
-- **ERROR**: Socket errors, network failures, and unexpected exceptions
-
-### Example Log Output
-
-```
-INFO - django_udp_discovery_client - Starting multi-interface discovery
-INFO - django_udp_discovery_client - Selected 2 interface(s) for discovery
-INFO - django_udp_discovery_client - Sending discovery request to 192.168.1.255:9999
-INFO - django_udp_discovery_client - Parsed valid response: server at 192.168.1.100:8000
-INFO - django_udp_discovery_client - Discovery complete: 1 server(s) found
-```
-
-## Requirements
-
-- Python >= 3.8
-- **Optional**: `netifaces>=0.11.0` or `ifaddr>=0.2.0` for network interface enumeration
-  - Install with: `pip install django-udp-discovery-client[network]`
-  - Without these, discovery will still work but interface filtering may be limited
-- **Optional**: `Django>=3.2` for Django integration (management command)
-  - Install with: `pip install django-udp-discovery-client[django]`
-  - Required only if you want to use the Django management command
-
-**Note**: This client is a **pure Python library** and does **not require Django** for basic usage. It can be used from any Python script to discover `django-udp-discovery` servers. Django is only required:
-- On the **server side** (when using `django-udp-discovery`)
-- For the **optional Django integration** (management command)
+---
 
 ## Verifying Installation
 
-After installing the package (e.g. `pip install django-udp-discovery-client[network]`), you can run a **sanity check** to confirm discovery works on your machine:
+From the project root (after cloning and installing with the `[network]` extra):
 
-1. Clone the repository (if you don’t already have it):
-   ```bash
-   git clone https://github.com/Ogro-Projukti/django-udp-discovery-client.git
-   cd django-udp-discovery-client
-   ```
+```bash
+pip install ".[network]"
+python scripts/sanity_check.py
+```
 
-2. Install the package with the optional network stack (for multi-interface discovery):
-   ```bash
-   pip install ".[network]"
-   ```
+The script lists interfaces and broadcast addresses, runs discovery, and prints a table of results or a segmented-network hint if no servers are found.
 
-3. Run the sanity check script from the project root:
-   ```bash
-   python scripts/sanity_check.py
-   ```
+---
 
-The script will:
+## Logging
 
-- List active network interfaces and the **broadcast addresses** used for discovery
-- Run discovery and print a table of any discovered servers (IP, port, response)
-- If no servers are found on a **segmented network** (e.g. large corporate subnet), print a short explanation and workarounds
+Logger name: `django_udp_discovery_client`. Example:
 
-Use this to confirm the library works in your environment and to troubleshoot “no servers found” (e.g. segmented networks, firewall, or no servers running).
+```python
+import logging
+logging.basicConfig(level=logging.INFO, format='%(name)s - %(levelname)s - %(message)s')
+# Optional: logging.getLogger('django_udp_discovery_client').setLevel(logging.DEBUG)
+```
 
-## Known Limitations
+Levels: **DEBUG** (socket/interface detail), **INFO** (discovery start/stop, servers found), **WARNING** (invalid responses, interface issues), **ERROR** (socket/network errors).
 
-- **IPv4 only** — Discovery uses IPv4 only. IPv6 is not supported.
-- **UDP broadcast only** — Discovery uses UDP broadcast to the local subnet. Multicast is not supported. Servers on other subnets or VLANs (outside the same broadcast domain) are not discoverable.
-- **Blocking API** — `discover()` and `discover_one()` are blocking: they send broadcasts and wait for responses until the configured timeout. There is no async or non-blocking API.
+---
+
+## Technical Considerations
+
+- **IPv4 only** — No IPv6.
+- **UDP broadcast only** — No multicast. Broadcast is limited to the local broadcast domain (often one subnet). Servers on other subnets or VLANs are not discoverable.
+- **Blocking API** — `discover()` and `discover_one()` block until timeout; no async API.
+- **Segmented / VLAN networks** — On large corporate subnets (e.g. 10.x, 172.16–31.x) segmented into VLANs, broadcast usually reaches only the local segment (e.g. /24). If no servers are found, the management command and `scripts/sanity_check.py` can print a one-time “Segmented Network Detected” message with workarounds:
+  - Run client and servers on the same segment.
+  - Use direct IP if the server address is known.
+  - Involve network admin for broadcast/multicast policy.
+
+---
+
+## Requirements
+
+- Python &gt;= 3.8
+- **Optional**: `netifaces>=0.11.0` or `ifaddr>=0.2.0` for multi-interface discovery — install with `pip install django-udp-discovery-client[network]`.
+- **Optional**: `Django>=3.2` for the management command — install with `pip install django-udp-discovery-client[django]`.
+
+Core library does not require Django. Django is only needed on the server (django-udp-discovery) or for the optional `discover_servers` management command.
+
+---
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/your-feature`).
+3. Commit changes (`git commit -m 'Add some feature'`).
+4. Push the branch (`git push origin feature/your-feature`).
+5. Open a Pull Request.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Please be respectful and constructive (Code of Conduct).
 
-### Code of Conduct
-
-This project adheres to a code of conduct. Please be respectful and constructive in all interactions.
+---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License. See [LICENSE](LICENSE) in the repository root.
 
-## Repository
+---
 
-https://github.com/Ogro-Projukti/django-udp-discovery-client
+**Repository:** [https://github.com/Ogro-Projukti/django-udp-discovery-client](https://github.com/Ogro-Projukti/django-udp-discovery-client)

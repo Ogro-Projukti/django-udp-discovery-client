@@ -8,30 +8,6 @@ Directory tree (one line per node) and short description for every file and fold
 
 ```
 django-udp-discovery-client/
-audit/
-audit/00_EXECUTIVE_SUMMARY.md
-audit/01_CODE_QUALITY.md
-audit/02_API_COMPLETENESS.md
-audit/03_TEST_COVERAGE.md
-audit/04_PYPI_READINESS.md
-audit/05_LIMITATIONS.md
-audit/06_REFACTORING_DIRECTIONS.md
-audit/README.md
-dev_test/
-dev_test/core/
-dev_test/core/asgi.py
-dev_test/core/settings.py
-dev_test/core/urls.py
-dev_test/core/wsgi.py
-dev_test/DIAGNOSIS_RESULTS.md
-dev_test/diagnose_network.py
-dev_test/identify_problem.py
-dev_test/manage.py
-dev_test/NETWORK_ANALYSIS.md
-dev_test/README_DIAGNOSIS.md
-dev_test/SOLUTION_SUMMARY.md
-dev_test/test.py
-dev_test/use_diagnosis.py
 discovery_client/
 discovery_client/__init__.py
 discovery_client/config.py
@@ -69,7 +45,6 @@ tests/test_udp_discovery.py
 CHANGELOG.md
 LICENSE
 MANIFEST.in
-mock_udp_server.py
 pyproject.toml
 README.md
 test_current_capabilities.py
@@ -82,30 +57,6 @@ test_current_capabilities.py
 | Path | Description |
 |------|-------------|
 | **django-udp-discovery-client/** | Repository root: Django UDP discovery client library and optional Django app. |
-| **audit/** | Audit and analysis docs (quality, API, tests, PyPI, limitations, refactoring). |
-| audit/00_EXECUTIVE_SUMMARY.md | High-level audit summary. |
-| audit/01_CODE_QUALITY.md | Code quality findings. |
-| audit/02_API_COMPLETENESS.md | API completeness and public surface. |
-| audit/03_TEST_COVERAGE.md | Test coverage analysis. |
-| audit/04_PYPI_READINESS.md | PyPI packaging readiness. |
-| audit/05_LIMITATIONS.md | Documented limitations. |
-| audit/06_REFACTORING_DIRECTIONS.md | Suggested refactoring directions. |
-| audit/README.md | Index for audit documents. |
-| **dev_test/** | Dev/test Django project and diagnosis scripts (not part of the installable package). |
-| **dev_test/core/** | Django project package for dev_test. |
-| dev_test/core/asgi.py | ASGI entry for dev_test. |
-| dev_test/core/settings.py | Django settings for dev_test. |
-| dev_test/core/urls.py | Root URLconf for dev_test. |
-| dev_test/core/wsgi.py | WSGI entry for dev_test. |
-| dev_test/DIAGNOSIS_RESULTS.md | Results of network/diagnosis runs. |
-| dev_test/diagnose_network.py | Script to diagnose network/interfaces for discovery. |
-| dev_test/identify_problem.py | Script to identify discovery/segmentation issues. |
-| dev_test/manage.py | Django manage.py for dev_test. |
-| dev_test/NETWORK_ANALYSIS.md | Network analysis notes. |
-| dev_test/README_DIAGNOSIS.md | How to run diagnosis and interpret results. |
-| dev_test/SOLUTION_SUMMARY.md | Summary of solutions/workarounds. |
-| dev_test/test.py | Ad-hoc test script for dev_test. |
-| dev_test/use_diagnosis.py | Script that uses diagnosis output. |
 | **discovery_client/** | Main Python package: UDP discovery client (no Django required). |
 | discovery_client/__init__.py | Package root; exports discover, discover_one, ClientConfig, load_config, DiscoveryResult. |
 | discovery_client/config.py | ClientConfig dataclass and load_config(); env vars (DISCOVERY_CLIENT_*) and validation. |
@@ -142,8 +93,7 @@ test_current_capabilities.py
 | tests/test_udp_discovery.py | parse_response, receive_responses, discover_servers_single_broadcast, socket behavior. |
 | CHANGELOG.md | Version history and notable changes. |
 | LICENSE | MIT license text. |
-| MANIFEST.in | sdist include/prune: LICENSE, README, CHANGELOG, pyproject.toml, discovery_client*, discovery_client_django*; prune docs, tests. |
-| mock_udp_server.py | CLI mock UDP server for manual/integration testing (responds to DISCOVER_SERVER). |
+| MANIFEST.in | sdist include/prune: metadata + discovery_client* + discovery_client_django*; prune audit, dev_test, docs, tests. |
 | pyproject.toml | Build (setuptools), project metadata, optional deps (network, django, dev, test), package find. |
 | README.md | User-facing docs: install, usage, limitations, verifying installation, sanity_check. |
 | test_current_capabilities.py | Ad-hoc script to exercise config/interfaces (not part of pytest). |

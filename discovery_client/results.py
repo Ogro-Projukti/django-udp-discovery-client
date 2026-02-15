@@ -1,7 +1,7 @@
 """
 Discovery result data structures.
 
-Defines the data model for discovered servers returned by the discovery API.
+Defines DiscoveryResult, the type returned by discover() and discover_one().
 """
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
@@ -10,24 +10,17 @@ from typing import Optional, Dict, Any
 @dataclass
 class DiscoveryResult:
     """
-    Result from a successful server discovery.
-    
-    Represents a discovered django-udp-discovery server on the network.
-    
+    A single discovered server returned by discover() or discover_one().
+
     Attributes:
-        ip: IPv4 address of the discovered server as string (e.g., "192.168.1.100")
-        port: Port number of the discovered server (e.g., 8000)
-        raw_response: Raw bytes received from the server in response to discovery
-        extra: Optional dictionary for future metadata (default: None)
-    
+        ip: IPv4 address of the server (e.g. "192.168.1.100").
+        port: Port number (1-65535).
+        raw_response: Raw bytes of the server response (e.g. b"SERVER_IP:192.168.1.100:8000").
+        extra: Optional metadata dict (e.g. source_address); default None.
+
     Example:
-        >>> result = DiscoveryResult(
-        ...     ip="192.168.1.100",
-        ...     port=8000,
-        ...     raw_response=b"SERVER_IP:192.168.1.100:8000"
-        ... )
-        >>> print(f"Found server at {result.ip}:{result.port}")
-        Found server at 192.168.1.100:8000
+        >>> r = DiscoveryResult(ip="192.168.1.100", port=8000, raw_response=b"SERVER_IP:...")
+        >>> print(r.ip, r.port)
     """
     ip: str
     port: int
