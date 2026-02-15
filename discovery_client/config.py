@@ -34,21 +34,20 @@ def _parse_list(value: str) -> List[str]:
 class ClientConfig:
     """
     Configuration for UDP discovery client.
-    
-    Supports defaults, runtime overrides via kwargs, and environment variable
-    overrides. Environment variables use the prefix 'DISCOVERY_CLIENT_'.
-    
+
+    Supports built-in defaults, environment variables (DISCOVERY_CLIENT_*), and
+    runtime overrides. When using load_config() or from_env(), priority is:
+    defaults < env vars < keyword overrides.
+
     Attributes:
-        discovery_port: UDP port for discovery (default: 9999)
-        discovery_message: Message to send for discovery (default: "DISCOVER_SERVER")
-        response_prefix: Expected prefix in server responses (default: "SERVER_IP:")
-        timeout: Timeout in seconds for discovery operations (default: 5.0)
-        retries: Number of retry attempts (default: 3).
-            Reserved for future use: retry logic is not currently implemented.
-        enable_subnet_scan: Whether to scan entire subnet (default: True).
-            Reserved for future use: subnet/VLAN unicast scanning is not currently implemented.
-        interfaces_whitelist: Optional list of network interfaces to use
-        interfaces_blacklist: Optional list of network interfaces to exclude
+        discovery_port: UDP port for discovery (default: 9999).
+        discovery_message: Message to send for discovery (default: b"DISCOVER_SERVER").
+        response_prefix: Expected prefix in server responses (default: b"SERVER_IP:").
+        timeout: Timeout in seconds for discovery operations (default: 5.0).
+        retries: Number of retry attempts (default: 3). Reserved for future use.
+        enable_subnet_scan: Whether to enable subnet scan (default: True). Reserved for future use.
+        interfaces_whitelist: If set, only these interface names are used (default: None).
+        interfaces_blacklist: If set, these interface names are excluded (default: None).
     """
     discovery_port: int = 9999
     discovery_message: bytes = field(default_factory=lambda: b"DISCOVER_SERVER")
@@ -91,25 +90,28 @@ class ClientConfig:
             raise ValueError(f"retries must be non-negative, got {self.retries}")
     
     @classmethod
-    def from_env(cls, **overrides) -> 'ClientConfig':
+    def from_env(cls, **overrides: object) -> 'ClientConfig':
         """
         Create ClientConfig from environment variables with optional overrides.
-        
-        Environment variables (all optional):
-            DISCOVERY_CLIENT_PORT: Discovery port (int)
-            DISCOVERY_CLIENT_MESSAGE: Discovery message (str/bytes)
-            DISCOVERY_CLIENT_RESPONSE_PREFIX: Response prefix (str/bytes)
-            DISCOVERY_CLIENT_TIMEOUT: Timeout in seconds (float)
-            DISCOVERY_CLIENT_RETRIES: Number of retries (int)
-            DISCOVERY_CLIENT_ENABLE_SUBNET_SCAN: Enable subnet scan (bool)
-            DISCOVERY_CLIENT_INTERFACES_WHITELIST: Comma-separated interface names
-            DISCOVERY_CLIENT_INTERFACES_BLACKLIST: Comma-separated interface names
-        
+
+        Priority: built-in defaults < DISCOVERY_CLIENT_* env vars < **overrides.
+        Only keys not present in overrides are read from the environment.
+
+        Environment variables (all optional, prefix DISCOVERY_CLIENT_):
+            PORT: Discovery port (int)
+            MESSAGE: Discovery message (str/bytes)
+            RESPONSE_PREFIX: Response prefix (str/bytes)
+            TIMEOUT: Timeout in seconds (float)
+            RETRIES: Number of retries (int)
+            ENABLE_SUBNET_SCAN: Enable subnet scan (bool: true/1/yes/on)
+            INTERFACES_WHITELIST: Comma-separated interface names
+            INTERFACES_BLACKLIST: Comma-separated interface names
+
         Args:
-            **overrides: Runtime overrides that take precedence over env vars
-        
+            **overrides: Runtime overrides; take precedence over env vars and defaults.
+
         Returns:
-            ClientConfig instance
+            ClientConfig: New instance with merged configuration.
         """
         env_prefix = "DISCOVERY_CLIENT_"
         
@@ -179,19 +181,22 @@ class ClientConfig:
         return cls(**config_dict)
 
 
-def load_config(**kwargs) -> ClientConfig:
+def load_config(**kwargs: object) -> ClientConfig:
     """
     Load and validate ClientConfig with optional overrides.
-    
-    This function creates a ClientConfig instance, reading defaults from
-    environment variables (if set) and applying any runtime overrides.
-    
+
+    Priority order (highest wins): (1) keyword arguments, (2) environment
+    variables (DISCOVERY_CLIENT_*), (3) built-in defaults. So load_config()
+    uses defaults plus any DISCOVERY_CLIENT_* env vars; load_config(timeout=5)
+    uses 5 for timeout and env/defaults for the rest.
+
     Args:
-        **kwargs: Runtime overrides that take precedence over env vars and defaults
-        
+        **kwargs: Optional keyword overrides (e.g. timeout=10.0, discovery_port=8888).
+            These take precedence over environment variables and defaults.
+
     Returns:
-        Validated ClientConfig instance
-        
+        ClientConfig: Validated configuration instance.
+
     Example:
         >>> config = load_config(timeout=10.0, discovery_port=8888)
         >>> config = load_config()  # Uses defaults and env vars only

@@ -1,8 +1,9 @@
 """
-Socket utilities for UDP discovery.
+UDP socket layer for discovery_client.
 
-Provides low-level UDP socket operations for sending discovery requests
-and receiving server responses.
+Low-level operations: create broadcast socket, send discovery message,
+receive and parse SERVER_IP: responses, multi-interface broadcast discovery,
+segmented-network detection, and formatted warning message for callers.
 """
 import logging
 import ipaddress

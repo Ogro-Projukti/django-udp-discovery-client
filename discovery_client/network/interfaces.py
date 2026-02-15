@@ -1,8 +1,9 @@
 """
-Network interface enumeration for UDP discovery.
+Network interface enumeration for discovery_client.
 
-Enumerates all IPv4 network interfaces, returning information about
-active non-loopback interfaces with IP, netmask, and broadcast addresses.
+Enumerates active IPv4 non-loopback interfaces (IP, netmask, broadcast),
+via netifaces or ifaddr. Provides InterfaceInfo and select_interfaces()
+for whitelist/blacklist filtering. Required for multi-interface discovery.
 """
 import ipaddress
 from dataclasses import dataclass
