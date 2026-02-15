@@ -25,7 +25,11 @@ def main():
     try:
         from discovery_client import load_config, discover
         from discovery_client.network.interfaces import get_interfaces, select_interfaces
-        from discovery_client.network.socket import detect_segmented_network, get_interface_broadcast
+        from discovery_client.network.socket import (
+            detect_segmented_network,
+            get_interface_broadcast,
+            format_segmented_network_warning,
+        )
     except ImportError as e:
         print("Error: Could not import discovery_client.", file=sys.stderr)
         print("Install the package first: pip install django-udp-discovery-client[network]", file=sys.stderr)
@@ -71,11 +75,6 @@ def main():
             except ValueError:
                 print("  {} -> (skipped, invalid broadcast)".format(iface.name))
 
-    # --- Check for segmented network before discovery ---
-    segmented_info = None
-    if selected:
-        segmented_info = detect_segmented_network(selected)
-
     # --- Run discovery ---
     print("\nRunning discovery (timeout={}s, port={})...".format(config.timeout, config.discovery_port))
     import logging
@@ -87,22 +86,13 @@ def main():
     print("-" * 60)
     if not results:
         print("  No servers found.")
-        if segmented_info:
-            print("\nSegmented network detected")
-            print("-" * 60)
-            print("  Interface: {} ({})".format(segmented_info["interface"], segmented_info["ip"]))
-            print("  Network:   {} (prefix /{}, {} hosts)".format(
-                segmented_info["network"],
-                segmented_info["prefix"],
-                segmented_info["total_hosts"],
-            ))
-            print("  Broadcast used:  {}".format(segmented_info["calculated_broadcast"]))
-            print("  Likely /24 segment: {}".format(segmented_info["likely_broadcast_domain"]))
-            print("\n  UDP broadcast only reaches the same broadcast domain (often one /24).")
-            print("  If servers are on other VLANs/segments, they will not respond.")
-            print("  Workarounds: run client and servers on same segment, or use direct IP.")
-        else:
-            print("  Tip: Ensure django-udp-discovery servers are running and listening on port {}.".format(config.discovery_port))
+        print("  Tip: Ensure django-udp-discovery servers are running and listening on port {}.".format(config.discovery_port))
+        # Segmented network diagnostic: exactly once at end, only when no discovery results
+        if selected:
+            segmented_info = detect_segmented_network(selected)
+            if segmented_info:
+                print()
+                print(format_segmented_network_warning(segmented_info, width=40))
         return 0
 
     # Format: IP, Port, Response (truncate long response)
