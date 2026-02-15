@@ -151,7 +151,7 @@ def discover_one(config: Optional[ClientConfig] = None) -> Optional[DiscoveryRes
     
     # Call discover() and return first result
     logger.debug("discover_one() called - will return first server or None")
-    servers = discover(config)
+    servers = discover(config=config)
     if servers:
         logger.debug(f"discover_one() found server: {servers[0].ip}:{servers[0].port}")
         return servers[0]

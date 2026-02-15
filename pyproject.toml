@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-udp-discovery-client"
-version = "0.1.0"
+version = "1.0.0"
 description = "Client library for discovering django-udp-discovery servers on local networks using UDP broadcast"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Ogro-Projukti"}, {name = "Md. Fatin Shadab Turja"}
 ]
@@ -24,7 +24,6 @@ keywords = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
@@ -74,12 +73,10 @@ Repository = "https://github.com/Ogro-Projukti/django-udp-discovery-client"
 Issues = "https://github.com/Ogro-Projukti/django-udp-discovery-client/issues"
 Documentation = "https://github.com/Ogro-Projukti/django-udp-discovery-client#readme"
 
-[tool.setuptools]
-packages = [
-    "discovery_client",
-    "discovery_client.network",
-    "discovery_client_django",
-    "discovery_client_django.management",
-    "discovery_client_django.management.commands",
-]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["discovery_client*", "discovery_client_django*"]
+
+[tool.setuptools.package-data]
+discovery_client = ["py.typed"]
 
